@@ -1,0 +1,46 @@
+# Document Management Module
+
+## Scope (this delivery)
+
+Nested folders, upload / multi-upload / drag-drop UI, metadata, version control, check-in/out locking, move/copy/rename, recycle bin (soft delete / restore / permanent delete), secure download stream (path never exposed to clients).
+
+## Database
+
+- `folders` — nested via `parent_id`, color/icon/favorite
+- `document_categories` — category / subcategory ready
+- `documents` — full EDAMS metadata + file pointers + lock fields
+- `document_versions` — immutable version history
+- `document_tags` + `document_tag` pivot
+- MySQL FULLTEXT on title/reference/keywords (skipped on SQLite tests)
+
+## API (`/api/v1`, auth:sanctum)
+
+| Action | Endpoint |
+|--------|----------|
+| List / CRUD | `GET/POST/PUT/DELETE /documents` |
+| Bulk upload | `POST /documents/bulk-upload` |
+| Replace version | `POST /documents/{id}/replace` |
+| Rename / move / copy | `POST .../rename|move|copy` |
+| Check-out / check-in | `POST .../check-out|check-in` |
+| Download | `GET /documents/{id}/download` |
+| Trash / restore / force | `GET /documents/trash`, `POST .../restore`, `DELETE .../force` |
+| Folder tree / CRUD | `GET /folders/tree`, `POST/PUT/DELETE /folders` |
+
+## Permissions
+
+`documents.view`, `documents.upload`, `documents.download`, `documents.manage`, `documents.delete`, `folders.manage`
+
+## Frontend
+
+Route: `/documents`
+
+- Organization selector
+- Folder tree + root
+- Drag & drop / multi-file upload
+- Document grid with checkout/in, copy, download, recycle bin
+
+## Security
+
+- Files stored on configured disk under hashed private paths
+- Downloads streamed via authenticated API (no raw storage path returned)
+- Checked-out documents locked from other users’ edits
