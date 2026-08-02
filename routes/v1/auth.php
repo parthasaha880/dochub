@@ -7,6 +7,7 @@ Route::prefix('auth')->group(function (): void {
     Route::middleware(['throttle:auth'])->group(function (): void {
         Route::post('login', [AuthController::class, 'login']);
         Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+        Route::post('forgot-password/verify-otp', [AuthController::class, 'verifyPasswordResetOtp']);
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
     });
 

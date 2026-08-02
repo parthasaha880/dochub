@@ -4,7 +4,7 @@ namespace App\Modules\Authentication\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class ForgotPasswordRequest extends FormRequest
+class VerifyPasswordResetOtpRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,6 +15,7 @@ class ForgotPasswordRequest extends FormRequest
     {
         return [
             'email' => ['required', 'string', 'email:rfc', 'max:255'],
+            'otp' => ['required', 'string', 'size:6'],
         ];
     }
 
@@ -24,9 +25,11 @@ class ForgotPasswordRequest extends FormRequest
             $email = strtolower(trim((string) $this->input('email')));
             $email = preg_replace('/\.(ocm|con|cpm|comm)$/i', '.com', $email) ?: $email;
 
-            $this->merge([
-                'email' => $email,
-            ]);
+            $this->merge(['email' => $email]);
+        }
+
+        if ($this->has('otp')) {
+            $this->merge(['otp' => preg_replace('/\s+/', '', (string) $this->input('otp'))]);
         }
     }
 }

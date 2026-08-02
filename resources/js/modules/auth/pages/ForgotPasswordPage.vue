@@ -4,10 +4,19 @@
             <div class="bg-gradient-to-r from-brand-700 to-brand-600 px-6 py-5 text-white">
                 <p class="font-display text-lg font-bold tracking-wide">EDAMS</p>
                 <h1 class="mt-1 font-display text-2xl font-semibold">Forgot password</h1>
-                <p class="mt-1 text-sm text-white/80">Recover access with a one-time email code</p>
+                <p class="mt-1 text-sm text-white/80">{{ stepSubtitle }}</p>
             </div>
 
             <div class="p-6 sm:p-8">
+                <!-- Step indicator -->
+                <div class="mb-5 flex items-center gap-2 text-xs font-medium text-slate-500">
+                    <span :class="step >= 1 ? 'text-brand-600' : ''">1. Email</span>
+                    <span class="text-slate-300">→</span>
+                    <span :class="step >= 2 ? 'text-brand-600' : ''">2. OTP</span>
+                    <span class="text-slate-300">→</span>
+                    <span :class="step >= 3 ? 'text-brand-600' : ''">3. New password</span>
+                </div>
+
                 <!-- Step 1: request OTP -->
                 <form v-if="step === 1" class="space-y-4" @submit.prevent="sendOtp">
                     <p class="text-sm text-slate-500">
@@ -23,8 +32,8 @@
                     </RouterLink>
                 </form>
 
-                <!-- Step 2: OTP + new password -->
-                <form v-else class="space-y-4" @submit.prevent="resetWithOtp">
+                <!-- Step 2: verify OTP only -->
+                <form v-else-if="step === 2" class="space-y-4" @submit.prevent="verifyOtp">
                     <div class="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-brand-100">
                         Code sent to <strong>{{ form.email }}</strong>.
                         <span v-if="countdown > 0"> Expires in {{ formatCountdown(countdown) }}.</span>
@@ -38,10 +47,30 @@
                             class="w-full tracking-[0.3em]"
                             maxlength="6"
                             inputmode="numeric"
+                            autocomplete="one-time-code"
                             placeholder="••••••"
                             required
                         />
                     </div>
+
+                    <Button type="submit" label="Verify OTP" icon="pi pi-check" class="w-full" :loading="loading" />
+                    <div class="flex items-center justify-between gap-2 text-sm">
+                        <button type="button" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200" @click="backToEmail">
+                            Change email
+                        </button>
+                        <button type="button" class="font-medium text-brand-600 hover:underline" :disabled="loading" @click="sendOtp">
+                            Resend OTP
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Step 3: new password (only after OTP matched) -->
+                <form v-else class="space-y-4" @submit.prevent="resetWithOtp">
+                    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+                        OTP verified for <strong>{{ form.email }}</strong>. Set your new password below.
+                        <span v-if="countdown > 0"> Session expires in {{ formatCountdown(countdown) }}.</span>
+                    </div>
+
                     <div>
                         <label class="mb-2 block text-sm font-medium">New password</label>
                         <Password v-model="form.password" class="w-full" input-class="w-full" toggle-mask required />
@@ -60,12 +89,12 @@
 
                     <Button type="submit" label="Reset password" icon="pi pi-lock" class="w-full" :loading="loading" />
                     <div class="flex items-center justify-between gap-2 text-sm">
-                        <button type="button" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200" @click="backToEmail">
-                            Change email
+                        <button type="button" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200" @click="backToOtp">
+                            Back to OTP
                         </button>
-                        <button type="button" class="font-medium text-brand-600 hover:underline" :disabled="loading" @click="sendOtp">
-                            Resend OTP
-                        </button>
+                        <RouterLink class="font-medium text-brand-600 hover:underline" :to="{ name: 'login' }">
+                            Sign in
+                        </RouterLink>
                     </div>
                 </form>
             </div>
@@ -74,7 +103,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
@@ -90,14 +119,28 @@ const loading = ref(false);
 const step = ref(1);
 const expiresIn = ref(10);
 const countdown = ref(0);
+const otpVerified = ref(false);
 let timer = null;
 
 const form = reactive({
-    email: route.query.email || '',
+    email: normalizeEmail(route.query.email || ''),
     otp: '',
     password: '',
     password_confirmation: '',
 });
+
+const stepSubtitle = computed(() => {
+    if (step.value === 1) return 'Recover access with a one-time email code';
+    if (step.value === 2) return 'Enter the code we sent to your email';
+    return 'Choose a new password for your account';
+});
+
+function normalizeEmail(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\.(ocm|con|cpm|comm)$/i, '.com');
+}
 
 function formatCountdown(seconds) {
     const m = Math.floor(seconds / 60);
@@ -130,16 +173,28 @@ function backToEmail() {
     form.otp = '';
     form.password = '';
     form.password_confirmation = '';
+    otpVerified.value = false;
     stopCountdown();
 }
 
+function backToOtp() {
+    step.value = 2;
+    form.password = '';
+    form.password_confirmation = '';
+    otpVerified.value = false;
+}
+
 async function sendOtp() {
+    form.email = normalizeEmail(form.email);
     loading.value = true;
     try {
         const data = await auth.forgotPassword(form.email);
         expiresIn.value = data.data?.expires_in_minutes || 10;
         step.value = 2;
         form.otp = '';
+        form.password = '';
+        form.password_confirmation = '';
+        otpVerified.value = false;
         startCountdown(expiresIn.value);
         toast.add({
             severity: 'success',
@@ -159,7 +214,48 @@ async function sendOtp() {
     }
 }
 
+async function verifyOtp() {
+    form.email = normalizeEmail(form.email);
+    form.otp = String(form.otp || '').replace(/\s+/g, '');
+    loading.value = true;
+    try {
+        const data = await auth.verifyPasswordResetOtp({
+            email: form.email,
+            otp: form.otp,
+        });
+        otpVerified.value = true;
+        step.value = 3;
+        form.password = '';
+        form.password_confirmation = '';
+        if (data.data?.expires_in_minutes) {
+            startCountdown(data.data.expires_in_minutes);
+        }
+        toast.add({
+            severity: 'success',
+            summary: 'OTP verified',
+            detail: data.message || 'You can set a new password now.',
+            life: 3500,
+        });
+    } catch (error) {
+        toast.add({
+            severity: 'error',
+            summary: 'Invalid OTP',
+            detail: error.response?.data?.errors?.otp?.[0]
+                || error.response?.data?.message
+                || 'Recovery code did not match',
+            life: 4500,
+        });
+    } finally {
+        loading.value = false;
+    }
+}
+
 async function resetWithOtp() {
+    if (!otpVerified.value) {
+        toast.add({ severity: 'warn', summary: 'Verify OTP first', life: 3000 });
+        step.value = 2;
+        return;
+    }
     if (form.password !== form.password_confirmation) {
         toast.add({ severity: 'error', summary: 'Passwords do not match', life: 3000 });
         return;
@@ -175,10 +271,15 @@ async function resetWithOtp() {
         toast.add({ severity: 'success', summary: data.message || 'Password updated', life: 4000 });
         router.push({ name: 'login' });
     } catch (error) {
+        const otpError = error.response?.data?.errors?.otp?.[0];
+        if (otpError) {
+            otpVerified.value = false;
+            step.value = 2;
+        }
         toast.add({
             severity: 'error',
             summary: 'Reset failed',
-            detail: error.response?.data?.errors?.otp?.[0]
+            detail: otpError
                 || error.response?.data?.errors?.password?.[0]
                 || error.response?.data?.message
                 || 'Unable to reset password',
@@ -190,10 +291,8 @@ async function resetWithOtp() {
 }
 
 onMounted(() => {
-    if (form.email) {
-        // Prefilled from email link — stay on step 1 so user explicitly requests/resends
-        step.value = 1;
-    }
+    form.email = normalizeEmail(form.email);
+    step.value = 1;
 });
 
 onBeforeUnmount(stopCountdown);

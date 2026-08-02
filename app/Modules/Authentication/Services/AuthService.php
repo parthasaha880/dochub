@@ -234,10 +234,66 @@ class AuthService
         $code = trim((string) $data['otp']);
         $password = (string) $data['password'];
 
+        $otp = $this->resolveActivePasswordResetOtp($email, $code);
+
+        if ($otp->verified_at === null) {
+            throw ValidationException::withMessages([
+                'otp' => ['Please verify your recovery code before setting a new password.'],
+            ]);
+        }
+
+        $user = $otp->user;
+
+        return DB::transaction(function () use ($user, $otp, $password) {
+            $user->forceFill([
+                'password' => $password,
+                'password_changed_at' => now(),
+                'force_password_change' => false,
+                'remember_token' => Str::random(60),
+                'updated_by' => $user->id,
+            ])->save();
+
+            $otp->forceFill([
+                'consumed_at' => now(),
+            ])->save();
+
+            $user->tokens()->delete();
+
+            event(new PasswordReset($user));
+
+            return $user->fresh();
+        });
+    }
+
+    /**
+     * Match recovery OTP and mark it verified so the user can set a new password.
+     *
+     * @return array{expires_in_minutes: int}
+     */
+    public function verifyPasswordResetOtp(string $email, string $code): array
+    {
+        $otp = $this->resolveActivePasswordResetOtp($email, $code);
+
+        if ($otp->verified_at === null) {
+            $otp->forceFill(['verified_at' => now()])->save();
+        }
+
+        $secondsLeft = max(0, $otp->expires_at->getTimestamp() - now()->getTimestamp());
+
+        return [
+            'expires_in_minutes' => max(1, (int) ceil($secondsLeft / 60)),
+        ];
+    }
+
+    private function resolveActivePasswordResetOtp(string $email, string $code): PasswordResetOtp
+    {
+        $email = Str::lower(trim($email));
+        $code = trim($code);
+
         $user = User::query()->where('email', $email)->where('is_active', true)->first();
         if (! $user) {
             throw ValidationException::withMessages([
-                'email' => ['We could not reset the password for this email.'],
+                'otp' => ['Invalid recovery code.'],
             ]);
         }
 
@@ -274,26 +330,9 @@ class AuthService
             ]);
         }
 
-        return DB::transaction(function () use ($user, $otp, $password) {
-            $user->forceFill([
-                'password' => $password,
-                'password_changed_at' => now(),
-                'force_password_change' => false,
-                'remember_token' => Str::random(60),
-                'updated_by' => $user->id,
-            ])->save();
+        $otp->setRelation('user', $user);
 
-            $otp->forceFill([
-                'verified_at' => now(),
-                'consumed_at' => now(),
-            ])->save();
-
-            $user->tokens()->delete();
-
-            event(new PasswordReset($user));
-
-            return $user->fresh();
-        });
+        return $otp;
     }
 
     public function resetPassword(array $credentials): string

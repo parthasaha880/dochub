@@ -9,6 +9,7 @@ use App\Modules\Authentication\Http\Requests\ForgotPasswordRequest;
 use App\Modules\Authentication\Http\Requests\LoginRequest;
 use App\Modules\Authentication\Http\Requests\LogoutOtherDevicesRequest;
 use App\Modules\Authentication\Http\Requests\ResetPasswordRequest;
+use App\Modules\Authentication\Http\Requests\VerifyPasswordResetOtpRequest;
 use App\Modules\Authentication\Http\Resources\LoginActivityResource;
 use App\Modules\Authentication\Http\Resources\UserDeviceResource;
 use App\Modules\Authentication\Http\Resources\UserResource;
@@ -134,6 +135,16 @@ class AuthController extends Controller
         return ApiResponse::success([
             'expires_in_minutes' => $result['expires_in_minutes'],
         ], 'If that email exists in EDAMS, a recovery code has been sent.');
+    }
+
+    public function verifyPasswordResetOtp(VerifyPasswordResetOtpRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+        $result = $this->authService->verifyPasswordResetOtp($data['email'], $data['otp']);
+
+        return ApiResponse::success([
+            'expires_in_minutes' => $result['expires_in_minutes'],
+        ], 'Recovery code verified. You can set a new password.');
     }
 
     public function resetPassword(ResetPasswordRequest $request): JsonResponse

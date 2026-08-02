@@ -77,6 +77,12 @@ export const useAuthStore = defineStore('auth', () => {
         return data;
     }
 
+    async function verifyPasswordResetOtp(payload) {
+        await ensureCsrf();
+        const { data } = await api.post('/auth/forgot-password/verify-otp', payload);
+        return data;
+    }
+
     async function resetPassword(payload) {
         await ensureCsrf();
         const { data } = await api.post('/auth/reset-password', payload);
@@ -153,6 +159,7 @@ export const useAuthStore = defineStore('auth', () => {
         logout,
         fetchMe,
         forgotPassword,
+        verifyPasswordResetOtp,
         resetPassword,
         fetchLoginActivities,
         fetchDevices,
