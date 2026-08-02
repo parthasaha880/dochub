@@ -56,6 +56,44 @@ class AuthController extends Controller
         return ApiResponse::success(new UserResource($user));
     }
 
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:150'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'timezone' => ['nullable', 'string', 'max:64'],
+            'locale' => ['nullable', 'string', 'max:20'],
+            'theme' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $user = $this->authService->updateProfile($request->user(), $data);
+
+        return ApiResponse::success(new UserResource($user), 'Profile updated');
+    }
+
+    public function avatar(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        return $this->authService->avatarResponse($request->user());
+    }
+
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $request->validate([
+            'avatar' => ['required', 'image', 'max:2048'],
+        ]);
+
+        $user = $this->authService->updateAvatar($request->user(), $request->file('avatar'));
+
+        return ApiResponse::success(new UserResource($user), 'Photo updated');
+    }
+
+    public function deleteAvatar(Request $request): JsonResponse
+    {
+        $user = $this->authService->removeAvatar($request->user());
+
+        return ApiResponse::success(new UserResource($user), 'Photo removed');
+    }
+
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
         $status = $this->authService->sendPasswordResetLink($request->validated('email'));

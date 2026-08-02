@@ -17,6 +17,10 @@ class UserResource extends JsonResource
             'username' => $this->username,
             'phone' => $this->phone,
             'employee_id' => $this->employee_id,
+            'avatar_path' => $this->avatar_path,
+            'avatar_url' => $this->avatar_path
+                ? url('/api/v1/auth/me/avatar').'?v='.($this->updated_at?->timestamp ?? time())
+                : null,
             'is_active' => $this->is_active,
             'force_password_change' => $this->force_password_change,
             'email_verified_at' => $this->email_verified_at,

@@ -25,6 +25,10 @@ class Folder extends Model
         'color',
         'icon',
         'is_favorite',
+        'is_locked',
+        'is_hidden',
+        'locked_by',
+        'locked_at',
         'sort_order',
         'description',
         'created_by',
@@ -36,6 +40,9 @@ class Folder extends Model
     {
         return [
             'is_favorite' => 'boolean',
+            'is_locked' => 'boolean',
+            'is_hidden' => 'boolean',
+            'locked_at' => 'datetime',
             'sort_order' => 'integer',
         ];
     }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Sharing\Services\SharingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ShareController extends Controller
@@ -75,7 +76,10 @@ class ShareController extends Controller
         return ApiResponse::success([
             'label' => $share->label,
             'document_title' => $share->document?->title,
+            'original_name' => $share->document?->original_name,
             'extension' => $share->document?->extension,
+            'mime_type' => $share->document?->mime_type,
+            'size' => $share->document?->size,
             'allow_download' => $share->allow_download,
             'expires_at' => $share->expires_at?->toIso8601String(),
             'requires_password' => (bool) $share->password_hash,
@@ -89,6 +93,15 @@ class ShareController extends Controller
         ]);
 
         return $this->service->downloadPublic($token, $data['password'] ?? null);
+    }
+
+    public function publicPreview(Request $request, string $token): Response
+    {
+        $data = $request->validate([
+            'password' => ['nullable', 'string'],
+        ]);
+
+        return $this->service->previewPublic($token, $data['password'] ?? null);
     }
 
     private function map($share, Request $request): array

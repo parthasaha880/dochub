@@ -1,12 +1,12 @@
 <template>
-    <div class="space-y-6">
-        <div class="flex flex-wrap items-end justify-between gap-4">
+    <div class="space-y-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-                <h1 class="font-display text-3xl font-semibold text-slate-900 dark:text-white">Organization</h1>
-                <p class="mt-1 text-sm text-slate-500">Manage structure, designations, and employees</p>
+                <h1 class="font-display text-2xl font-semibold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Organization</h1>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage structure, designations, and employees</p>
             </div>
-            <div class="min-w-64">
-                <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Active organization</label>
+            <div class="w-full min-w-64 sm:w-72">
+                <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Active organization</label>
                 <Select
                     v-model="selectedOrg"
                     :options="orgStore.organizations"
@@ -19,17 +19,31 @@
             </div>
         </div>
 
-        <div class="grid gap-6 xl:grid-cols-[280px_1fr]">
-            <aside class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-                <div class="mb-3 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold">Structure tree</h2>
-                    <Button icon="pi pi-refresh" text rounded size="small" @click="refreshTree" />
+        <div class="grid gap-5 xl:grid-cols-[270px_1fr]">
+            <aside class="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                <div class="mb-2 flex items-center justify-between gap-2 px-1">
+                    <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Structure tree</h2>
+                    <Button
+                        icon="pi pi-refresh"
+                        text
+                        rounded
+                        size="small"
+                        v-tooltip.bottom="'Refresh tree'"
+                        @click="refreshTree"
+                    />
                 </div>
-                <Tree v-if="treeNodes.length" :value="treeNodes" class="w-full text-sm" />
-                <p v-else class="text-sm text-slate-500">No organization selected.</p>
+                <Tree
+                    v-if="treeNodes.length"
+                    :value="treeNodes"
+                    class="org-tree w-full text-sm"
+                />
+                <div v-else class="rounded-lg bg-slate-50 px-3 py-8 text-center dark:bg-slate-900/50">
+                    <i class="pi pi-sitemap mb-2 text-xl text-slate-300 dark:text-slate-600" />
+                    <p class="text-sm text-slate-500">No organization selected</p>
+                </div>
             </aside>
 
-            <section class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+            <section class="org-tabs overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
                 <TabView v-model:active-index="activeTab">
                     <TabPanel
                         v-for="tab in tabs"
@@ -69,10 +83,10 @@ const tabs = [
         key: 'organizations',
         label: 'Organizations',
         columns: [
-            { field: 'code', header: 'Code' },
-            { field: 'name', header: 'Name' },
+            { field: 'code', header: 'Code', kind: 'code' },
+            { field: 'name', header: 'Name', kind: 'primary' },
             { field: 'city', header: 'City' },
-            { field: 'is_active', header: 'Active' },
+            { field: 'is_active', header: 'Status', kind: 'boolean' },
         ],
         fields: [
             { key: 'code', label: 'Code', required: true },
@@ -90,10 +104,10 @@ const tabs = [
         key: 'branches',
         label: 'Branches',
         columns: [
-            { field: 'code', header: 'Code' },
-            { field: 'name', header: 'Name' },
+            { field: 'code', header: 'Code', kind: 'code' },
+            { field: 'name', header: 'Name', kind: 'primary' },
             { field: 'city', header: 'City' },
-            { field: 'is_head_office', header: 'Head office' },
+            { field: 'is_head_office', header: 'Head office', kind: 'boolean' },
         ],
         fields: [
             { key: 'code', label: 'Code', required: true },
@@ -109,8 +123,8 @@ const tabs = [
         key: 'departments',
         label: 'Departments',
         columns: [
-            { field: 'code', header: 'Code' },
-            { field: 'name', header: 'Name' },
+            { field: 'code', header: 'Code', kind: 'code' },
+            { field: 'name', header: 'Name', kind: 'primary' },
             { field: 'branch.name', header: 'Branch' },
         ],
         fields: [
@@ -125,8 +139,8 @@ const tabs = [
         key: 'sections',
         label: 'Sections',
         columns: [
-            { field: 'code', header: 'Code' },
-            { field: 'name', header: 'Name' },
+            { field: 'code', header: 'Code', kind: 'code' },
+            { field: 'name', header: 'Name', kind: 'primary' },
             { field: 'department.name', header: 'Department' },
         ],
         fields: [
@@ -141,8 +155,8 @@ const tabs = [
         key: 'units',
         label: 'Units',
         columns: [
-            { field: 'code', header: 'Code' },
-            { field: 'name', header: 'Name' },
+            { field: 'code', header: 'Code', kind: 'code' },
+            { field: 'name', header: 'Name', kind: 'primary' },
             { field: 'department.name', header: 'Department' },
         ],
         fields: [
@@ -157,8 +171,8 @@ const tabs = [
         key: 'offices',
         label: 'Offices',
         columns: [
-            { field: 'code', header: 'Code' },
-            { field: 'name', header: 'Name' },
+            { field: 'code', header: 'Code', kind: 'code' },
+            { field: 'name', header: 'Name', kind: 'primary' },
             { field: 'city', header: 'City' },
         ],
         fields: [
@@ -173,8 +187,8 @@ const tabs = [
         key: 'designations',
         label: 'Designations',
         columns: [
-            { field: 'code', header: 'Code' },
-            { field: 'name', header: 'Name' },
+            { field: 'code', header: 'Code', kind: 'code' },
+            { field: 'name', header: 'Name', kind: 'primary' },
             { field: 'grade', header: 'Grade' },
             { field: 'level', header: 'Level' },
         ],
@@ -190,11 +204,11 @@ const tabs = [
         key: 'employees',
         label: 'Employees',
         columns: [
-            { field: 'employee_code', header: 'Code' },
-            { field: 'full_name', header: 'Name' },
+            { field: 'employee_code', header: 'Code', kind: 'code' },
+            { field: 'full_name', header: 'Name', kind: 'primary' },
             { field: 'email', header: 'Email' },
             { field: 'department.name', header: 'Department' },
-            { field: 'employment_status', header: 'Status' },
+            { field: 'employment_status', header: 'Status', kind: 'status' },
         ],
         fields: [
             { key: 'employee_code', label: 'Employee code', required: true },
@@ -242,3 +256,51 @@ onMounted(async () => {
     await refreshTree();
 });
 </script>
+
+<style scoped>
+.org-tabs :deep(.p-tabview-tablist) {
+    background: transparent;
+    border-bottom: 1px solid rgb(241 245 249);
+    padding: 0 0.75rem;
+    gap: 0.15rem;
+}
+
+:global(.dark) .org-tabs :deep(.p-tabview-tablist) {
+    border-bottom-color: rgb(30 41 59);
+}
+
+.org-tabs :deep(.p-tabview-tablist-content) {
+    border: none;
+}
+
+.org-tabs :deep(.p-tabview-tab-header) {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 0.85rem 0.9rem;
+    color: rgb(100 116 139);
+}
+
+.org-tabs :deep(.p-tabview-tablist-item-active .p-tabview-tab-header) {
+    color: var(--color-brand-600, #154360);
+    font-weight: 600;
+}
+
+.org-tabs :deep(.p-tabview-panels) {
+    padding: 0;
+    background: transparent;
+}
+
+.org-tree :deep(.p-tree-node-content) {
+    border-radius: 0.5rem;
+    padding: 0.35rem 0.5rem;
+}
+
+.org-tree :deep(.p-tree-node-label) {
+    font-size: 0.8125rem;
+    color: rgb(51 65 85);
+}
+
+:global(.dark) .org-tree :deep(.p-tree-node-label) {
+    color: rgb(203 213 225);
+}
+</style>

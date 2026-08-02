@@ -211,7 +211,8 @@ class DashboardRepository implements DashboardRepositoryInterface
             ->where('organization_id', $organizationId)
             ->selectRaw("COALESCE(NULLIF(extension, ''), 'unknown') as label")
             ->selectRaw('COUNT(*) as value')
-            ->groupByRaw("COALESCE(NULLIF(extension, ''), 'unknown')")
+            // Group by alias — MariaDB ONLY_FULL_GROUP_BY rejects repeating the expression.
+            ->groupBy('label')
             ->orderByDesc('value')
             ->limit(8)
             ->get()
@@ -233,7 +234,7 @@ class DashboardRepository implements DashboardRepositoryInterface
             ->where('documents.organization_id', $organizationId)
             ->selectRaw("COALESCE(departments.name, 'Unassigned') as label")
             ->selectRaw('COUNT(*) as value')
-            ->groupByRaw("COALESCE(departments.name, 'Unassigned')")
+            ->groupBy('label')
             ->orderByDesc('value')
             ->limit(8)
             ->get()
@@ -334,7 +335,8 @@ class DashboardRepository implements DashboardRepositoryInterface
             ->selectRaw("{$labelExpression} as label")
             ->selectRaw('COUNT(*) as count')
             ->selectRaw('COALESCE(SUM(documents.size), 0) as size_bytes')
-            ->groupByRaw($labelExpression)
+            // Group by alias — MariaDB ONLY_FULL_GROUP_BY rejects repeating the expression.
+            ->groupBy('label')
             ->orderByDesc('size_bytes')
             ->limit(25)
             ->get()
@@ -388,7 +390,8 @@ class DashboardRepository implements DashboardRepositoryInterface
             ->selectRaw("{$categoryCase} as label")
             ->selectRaw('COUNT(*) as count')
             ->selectRaw('COALESCE(SUM(size), 0) as size_bytes')
-            ->groupByRaw($categoryCase)
+            // Group by alias — MariaDB ONLY_FULL_GROUP_BY rejects repeating the CASE expression.
+            ->groupBy('label')
             ->orderByDesc('size_bytes')
             ->get()
             ->map(fn ($row) => [
@@ -411,7 +414,7 @@ class DashboardRepository implements DashboardRepositoryInterface
             ->selectRaw("COALESCE(users.name, 'Unknown user') as label")
             ->selectRaw('COUNT(*) as count')
             ->selectRaw('COALESCE(SUM(documents.size), 0) as size_bytes')
-            ->groupByRaw("COALESCE(users.name, 'Unknown user')")
+            ->groupBy('label')
             ->orderByDesc('size_bytes')
             ->limit(25)
             ->get()

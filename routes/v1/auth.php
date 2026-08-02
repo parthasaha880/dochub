@@ -13,6 +13,10 @@ Route::prefix('auth')->group(function (): void {
     Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::get('me', [AuthController::class, 'me']);
+        Route::put('me', [AuthController::class, 'updateProfile']);
+        Route::get('me/avatar', [AuthController::class, 'avatar']);
+        Route::post('me/avatar', [AuthController::class, 'uploadAvatar']);
+        Route::delete('me/avatar', [AuthController::class, 'deleteAvatar']);
         Route::post('email/verification-notification', [AuthController::class, 'sendVerificationEmail'])
             ->middleware('throttle:6,1');
         Route::get('email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])

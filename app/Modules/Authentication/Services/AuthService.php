@@ -222,6 +222,61 @@ class AuthService
         return $user->loadMissing(['roles', 'permissions']);
     }
 
+    public function updateProfile(User $user, array $data): User
+    {
+        $user->fill(collect($data)->only([
+            'name',
+            'phone',
+            'timezone',
+            'locale',
+            'theme',
+        ])->all());
+        $user->updated_by = $user->id;
+        $user->save();
+
+        return $user->fresh()->loadMissing(['roles', 'permissions']);
+    }
+
+    public function updateAvatar(User $user, \Illuminate\Http\UploadedFile $file): User
+    {
+        $disk = 'public';
+        $directory = 'avatars';
+
+        if ($user->avatar_path) {
+            \Illuminate\Support\Facades\Storage::disk($disk)->delete($user->avatar_path);
+        }
+
+        $path = $file->store($directory, $disk);
+        $user->forceFill([
+            'avatar_path' => $path,
+            'updated_by' => $user->id,
+        ])->save();
+
+        return $user->fresh()->loadMissing(['roles', 'permissions']);
+    }
+
+    public function removeAvatar(User $user): User
+    {
+        if ($user->avatar_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar_path);
+            $user->forceFill([
+                'avatar_path' => null,
+                'updated_by' => $user->id,
+            ])->save();
+        }
+
+        return $user->fresh()->loadMissing(['roles', 'permissions']);
+    }
+
+    public function avatarResponse(User $user): \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\Response
+    {
+        if (! $user->avatar_path || ! \Illuminate\Support\Facades\Storage::disk('public')->exists($user->avatar_path)) {
+            abort(404, 'Avatar not found.');
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->response($user->avatar_path);
+    }
+
     public function loginActivities(User $user, int $perPage = 15): LengthAwarePaginator
     {
         return $this->authRepository->paginateLoginActivities($user, $perPage);

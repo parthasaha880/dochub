@@ -31,4 +31,5 @@ Route::middleware('auth:sanctum')->group(function (): void {
 });
 
 Route::get('public/shares/{token}', [ShareController::class, 'publicShow']);
+Route::get('public/shares/{token}/preview', [ShareController::class, 'publicPreview']);
 Route::get('public/shares/{token}/download', [ShareController::class, 'publicDownload']);

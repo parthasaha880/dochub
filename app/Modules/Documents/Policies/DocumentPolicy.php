@@ -47,6 +47,11 @@ class DocumentPolicy
         return $user->can('documents.view') || $user->can('documents.download');
     }
 
+    public function preview(User $user, Document $document): bool
+    {
+        return $this->download($user, $document);
+    }
+
     public function checkOut(User $user, Document $document): bool
     {
         return $this->update($user, $document);

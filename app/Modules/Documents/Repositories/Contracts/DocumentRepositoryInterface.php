@@ -25,7 +25,8 @@ interface DocumentRepositoryInterface
 
     public function paginateTrashed(array $filters = [], int $perPage = 15): LengthAwarePaginator;
 
-    public function folderTree(string $organizationId): Collection;
+    public function folderTree(string $organizationId, bool $includeHidden = false): Collection;
+
 
     public function findFolder(string $id): Folder;
 

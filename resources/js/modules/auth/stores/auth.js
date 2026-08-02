@@ -97,6 +97,28 @@ export const useAuthStore = defineStore('auth', () => {
         return data;
     }
 
+    async function updateProfile(payload) {
+        const { data } = await api.put('/auth/me', payload);
+        user.value = data.data;
+        return user.value;
+    }
+
+    async function uploadAvatar(file) {
+        const form = new FormData();
+        form.append('avatar', file);
+        const { data } = await api.post('/auth/me/avatar', form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        user.value = data.data;
+        return user.value;
+    }
+
+    async function removeAvatar() {
+        const { data } = await api.delete('/auth/me/avatar');
+        user.value = data.data;
+        return user.value;
+    }
+
     return {
         user,
         token,
@@ -113,6 +135,9 @@ export const useAuthStore = defineStore('auth', () => {
         fetchDevices,
         revokeDevice,
         logoutOtherDevices,
+        updateProfile,
+        uploadAvatar,
+        removeAvatar,
         clearSession,
     };
 });

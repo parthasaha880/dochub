@@ -8,6 +8,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     const currentFolderId = ref(null);
     const folderTree = ref([]);
     const showTrash = ref(false);
+    const showHiddenFolders = ref(false);
 
     function setOrganization(id) {
         organizationId.value = id;
@@ -17,7 +18,10 @@ export const useDocumentsStore = defineStore('documents', () => {
     async function loadFolders() {
         if (!organizationId.value) return [];
         const { data } = await api.get('/folders/tree', {
-            params: { organization_id: organizationId.value },
+            params: {
+                organization_id: organizationId.value,
+                include_hidden: showHiddenFolders.value ? 1 : 0,
+            },
         });
         folderTree.value = data.data;
         return folderTree.value;
@@ -32,8 +36,41 @@ export const useDocumentsStore = defineStore('documents', () => {
         return data.data;
     }
 
+    async function renameFolder(id, name) {
+        const { data } = await api.post(`/folders/${id}/rename`, { name });
+        await loadFolders();
+        return data.data;
+    }
+
+    async function lockFolder(id) {
+        const { data } = await api.post(`/folders/${id}/lock`);
+        await loadFolders();
+        return data.data;
+    }
+
+    async function unlockFolder(id) {
+        const { data } = await api.post(`/folders/${id}/unlock`);
+        await loadFolders();
+        return data.data;
+    }
+
+    async function hideFolder(id) {
+        const { data } = await api.post(`/folders/${id}/hide`);
+        await loadFolders();
+        return data.data;
+    }
+
+    async function unhideFolder(id) {
+        const { data } = await api.post(`/folders/${id}/unhide`);
+        await loadFolders();
+        return data.data;
+    }
+
     async function deleteFolder(id) {
         await api.delete(`/folders/${id}`);
+        if (currentFolderId.value === id) {
+            currentFolderId.value = null;
+        }
         await loadFolders();
     }
 
@@ -116,15 +153,25 @@ export const useDocumentsStore = defineStore('documents', () => {
         return `/api/v1/documents/${id}/download`;
     }
 
+    function previewUrl(id) {
+        return `/api/v1/documents/${id}/preview`;
+    }
+
     return {
         loading,
         organizationId,
         currentFolderId,
         folderTree,
         showTrash,
+        showHiddenFolders,
         setOrganization,
         loadFolders,
         createFolder,
+        renameFolder,
+        lockFolder,
+        unlockFolder,
+        hideFolder,
+        unhideFolder,
         deleteFolder,
         fetchDocuments,
         uploadDocument,
@@ -139,5 +186,6 @@ export const useDocumentsStore = defineStore('documents', () => {
         move,
         copy,
         downloadUrl,
+        previewUrl,
     };
 });

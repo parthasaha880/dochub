@@ -24,9 +24,15 @@ class DocumentRepository implements DocumentRepositoryInterface
         if (array_key_exists('folder_id', $filters)) {
             if ($filters['folder_id'] === null || $filters['folder_id'] === 'root') {
                 $query->whereNull('folder_id');
+                // Root listing: hide cascaded-hidden documents unless explicitly requested.
+                if (empty($filters['include_hidden'])) {
+                    $query->where('is_hidden', false);
+                }
             } elseif ($filters['folder_id'] !== '') {
                 $query->where('folder_id', $filters['folder_id']);
             }
+        } elseif (empty($filters['include_hidden'])) {
+            $query->where('is_hidden', false);
         }
 
         foreach (['department_id', 'category_id', 'status', 'approval_status', 'document_type', 'extension'] as $key) {
@@ -106,12 +112,25 @@ class DocumentRepository implements DocumentRepositoryInterface
         return $query->paginate($perPage);
     }
 
-    public function folderTree(string $organizationId): Collection
+    public function folderTree(string $organizationId, bool $includeHidden = false): Collection
     {
+        $constrain = function ($query) use ($includeHidden): void {
+            if (! $includeHidden) {
+                $query->where('is_hidden', false);
+            }
+            $query->orderBy('sort_order')->orderBy('name');
+        };
+
         return Folder::query()
             ->where('organization_id', $organizationId)
             ->whereNull('parent_id')
-            ->with(['children' => fn ($q) => $q->with('children')])
+            ->when(! $includeHidden, fn ($q) => $q->where('is_hidden', false))
+            ->with(['children' => function ($q) use ($constrain, $includeHidden): void {
+                $constrain($q);
+                $q->with(['children' => function ($q2) use ($constrain): void {
+                    $constrain($q2);
+                }]);
+            }])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();

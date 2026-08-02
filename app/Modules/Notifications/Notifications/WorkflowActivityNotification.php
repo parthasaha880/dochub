@@ -20,7 +20,13 @@ class WorkflowActivityNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        $channels = ['database'];
+
+        if (config('edams.workflow_notify_mail', false)) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     public function toArray(object $notifiable): array

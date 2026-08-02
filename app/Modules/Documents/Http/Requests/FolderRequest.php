@@ -21,6 +21,8 @@ class FolderRequest extends FormRequest
             'color' => ['nullable', 'string', 'max:20'],
             'icon' => ['nullable', 'string', 'max:50'],
             'is_favorite' => ['sometimes', 'boolean'],
+            'is_locked' => ['sometimes', 'boolean'],
+            'is_hidden' => ['sometimes', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'description' => ['nullable', 'string'],
         ];

@@ -38,6 +38,7 @@ class DocumentResource extends JsonResource
             'extension' => $this->extension,
             'size' => $this->size,
             'is_locked' => $this->is_locked,
+            'is_hidden' => (bool) $this->is_hidden,
             'checked_out_by' => $this->checked_out_by,
             'checked_out_at' => $this->checked_out_at,
             'owner' => $this->whenLoaded('owner', fn () => [

@@ -104,4 +104,14 @@ class SharingService
 
         return $this->documents->download($document->id);
     }
+
+    public function previewPublic(string $token, ?string $password = null): \Symfony\Component\HttpFoundation\Response
+    {
+        $share = $this->resolvePublic($token, $password);
+        $share->update(['last_accessed_at' => now()]);
+
+        $this->audit->log('sharing', 'share.previewed', 'Shared document previewed', $share, null, null, null, $share->organization_id);
+
+        return $this->documents->preview($share->document->id);
+    }
 }

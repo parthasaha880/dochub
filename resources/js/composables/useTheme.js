@@ -4,14 +4,14 @@ const isDark = ref(false);
 
 export function useTheme() {
     const apply = (dark) => {
-        isDark.value = dark;
-        document.documentElement.classList.toggle('dark', dark);
-        localStorage.setItem('edams_theme', dark ? 'dark' : 'light');
+        isDark.value = !!dark;
+        document.documentElement.classList.toggle('dark', isDark.value);
+        localStorage.setItem('edams_theme', isDark.value ? 'dark' : 'light');
     };
 
     const initTheme = () => {
         const saved = localStorage.getItem('edams_theme');
-        if (saved) {
+        if (saved === 'dark' || saved === 'light') {
             apply(saved === 'dark');
             return;
         }

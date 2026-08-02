@@ -26,7 +26,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     async function createWorkflow(payload) {
         const { data } = await api.post('/workflows', {
             ...payload,
-            organization_id: organizationId.value,
+            organization_id: payload.organization_id || organizationId.value,
         });
         return data.data;
     }

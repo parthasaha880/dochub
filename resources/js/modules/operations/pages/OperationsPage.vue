@@ -194,6 +194,7 @@ import TabView from 'primevue/tabview';
 import Tag from 'primevue/tag';
 import { useToast } from 'primevue/usetoast';
 import api from '@/services/api';
+import { resolveOrganizationId } from '@/utils/organization';
 
 const toast = useToast();
 const organizations = ref([]);
@@ -239,7 +240,10 @@ function formatDate(v) {
 async function loadOrgs() {
     const { data } = await api.get('/organizations', { params: { per_page: 100 } });
     organizations.value = data.data.data || data.data;
-    if (!orgId.value && organizations.value.length) orgId.value = organizations.value[0].id;
+    orgId.value = resolveOrganizationId(organizations.value, orgId.value);
+    if (orgId.value) {
+        localStorage.setItem('edams_org_id', orgId.value);
+    }
 }
 
 async function loadAudit() {

@@ -117,6 +117,100 @@ class DocumentApiTest extends TestCase
         $this->assertDatabaseCount('document_versions', 2);
     }
 
+    public function test_document_preview_streams_inline(): void
+    {
+        $document = $this->createDocument();
+
+        $this->get("/api/v1/documents/{$document->id}/preview")
+            ->assertOk()
+            ->assertHeader('content-disposition');
+    }
+
+    public function test_folder_lock_and_hide_cascade_to_documents(): void
+    {
+        $folder = $this->postJson('/api/v1/folders', [
+            'organization_id' => $this->organization->id,
+            'name' => 'Secure',
+        ])->assertCreated()->json('data');
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('secret.pdf', 40, 'application/pdf');
+        $documentId = $this->post('/api/v1/documents', [
+            'organization_id' => $this->organization->id,
+            'folder_id' => $folder['id'],
+            'title' => 'Secret Doc',
+            'file' => $file,
+        ], ['Accept' => 'application/json'])->json('data.id');
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/lock")
+            ->assertOk();
+
+        $this->assertDatabaseHas('documents', [
+            'id' => $documentId,
+            'is_locked' => 1,
+        ]);
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/hide")
+            ->assertOk();
+
+        $this->assertDatabaseHas('documents', [
+            'id' => $documentId,
+            'is_hidden' => 1,
+        ]);
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/unlock")->assertOk();
+        $this->postJson("/api/v1/folders/{$folder['id']}/unhide")->assertOk();
+
+        $this->assertDatabaseHas('documents', [
+            'id' => $documentId,
+            'is_locked' => 0,
+            'is_hidden' => 0,
+        ]);
+    }
+
+    public function test_folder_rename_lock_hide_and_delete(): void
+    {
+        $folder = $this->postJson('/api/v1/folders', [
+            'organization_id' => $this->organization->id,
+            'name' => 'Archive',
+        ])->assertCreated()->json('data');
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/rename", ['name' => 'Archives'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Archives');
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/lock")
+            ->assertOk()
+            ->assertJsonPath('data.is_locked', true);
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/rename", ['name' => 'Nope'])
+            ->assertStatus(422);
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/unlock")
+            ->assertOk()
+            ->assertJsonPath('data.is_locked', false);
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/hide")
+            ->assertOk()
+            ->assertJsonPath('data.is_hidden', true);
+
+        $this->getJson('/api/v1/folders/tree?organization_id='.$this->organization->id)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson('/api/v1/folders/tree?organization_id='.$this->organization->id.'&include_hidden=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->postJson("/api/v1/folders/{$folder['id']}/unhide")
+            ->assertOk()
+            ->assertJsonPath('data.is_hidden', false);
+
+        $this->deleteJson("/api/v1/folders/{$folder['id']}")
+            ->assertOk();
+
+        $this->assertSoftDeleted('folders', ['id' => $folder['id']]);
+    }
+
     public function test_folder_tree_endpoint(): void
     {
         Folder::query()->create([

@@ -37,6 +37,11 @@ const router = createRouter({
                     component: () => import('@/modules/dashboard/pages/DashboardPage.vue'),
                 },
                 {
+                    path: 'profile',
+                    name: 'profile',
+                    component: () => import('@/modules/auth/pages/ProfilePage.vue'),
+                },
+                {
                     path: 'security/sessions',
                     name: 'sessions',
                     component: () => import('@/modules/auth/pages/SessionsPage.vue'),
@@ -80,6 +85,11 @@ const router = createRouter({
                     path: 'operations',
                     name: 'operations',
                     component: () => import('@/modules/operations/pages/OperationsPage.vue'),
+                },
+                {
+                    path: 'manual',
+                    name: 'manual',
+                    component: () => import('@/modules/manual/pages/SoftwareManualPage.vue'),
                 },
             ],
         },

@@ -120,13 +120,23 @@
 
                 <div>
                     <div class="mb-2 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold">Sequential approval steps</h3>
+                        <div>
+                            <h3 class="text-sm font-semibold">Sequential approval steps</h3>
+                            <p class="text-xs text-slate-500">Each level must have a role and/or at least one approver user.</p>
+                        </div>
                         <Button label="Add step" size="small" outlined icon="pi pi-plus" @click="addStep" />
                     </div>
-                    <div v-for="(step, idx) in form.steps" :key="idx" class="mb-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                    <div
+                        v-for="(step, idx) in form.steps"
+                        :key="idx"
+                        class="mb-3 rounded-lg border p-3"
+                        :class="stepErrors[idx]
+                            ? 'border-red-400 dark:border-red-500'
+                            : 'border-slate-200 dark:border-slate-700'"
+                    >
                         <div class="mb-2 flex items-center justify-between">
                             <p class="text-sm font-medium">Level {{ idx + 1 }}</p>
-                            <Button v-if="form.steps.length > 1" icon="pi pi-trash" text rounded severity="danger" size="small" @click="form.steps.splice(idx, 1)" />
+                            <Button v-if="form.steps.length > 1" icon="pi pi-trash" text rounded severity="danger" size="small" @click="removeStep(idx)" />
                         </div>
                         <div class="grid gap-3 md:grid-cols-2">
                             <InputText v-model="step.name" placeholder="Step name" class="w-full" />
@@ -138,6 +148,7 @@
                                 placeholder="Approver role (optional)"
                                 show-clear
                                 class="w-full"
+                                @change="clearStepError(idx)"
                             />
                         </div>
                         <MultiSelect
@@ -149,7 +160,9 @@
                             display="chip"
                             class="mt-2 w-full"
                             filter
+                            @change="clearStepError(idx)"
                         />
+                        <p v-if="stepErrors[idx]" class="mt-2 text-xs text-red-500">{{ stepErrors[idx] }}</p>
                     </div>
                 </div>
             </div>
@@ -206,6 +219,7 @@ import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 import api from '@/services/api';
 import { useWorkflowStore } from '@/modules/workflow/stores/workflow';
+import { resolveOrganizationId } from '@/utils/organization';
 
 const store = useWorkflowStore();
 const toast = useToast();
@@ -224,6 +238,7 @@ const showEditor = ref(false);
 const editingId = ref(null);
 const saving = ref(false);
 const form = ref(emptyForm());
+const stepErrors = ref({});
 
 const showDetail = ref(false);
 const detail = ref(null);
@@ -255,8 +270,8 @@ function formatDate(value) {
 async function loadOrgs() {
     const { data } = await api.get('/organizations', { params: { per_page: 100 } });
     organizations.value = data.data.data || data.data;
-    if (!selectedOrg.value && organizations.value.length) {
-        selectedOrg.value = organizations.value[0].id;
+    selectedOrg.value = resolveOrganizationId(organizations.value, selectedOrg.value);
+    if (selectedOrg.value) {
         store.setOrganization(selectedOrg.value);
     }
 }
@@ -297,11 +312,13 @@ function onTabChange() {
 function openCreate() {
     editingId.value = null;
     form.value = emptyForm();
+    stepErrors.value = {};
     showEditor.value = true;
 }
 
 function openEdit(row) {
     editingId.value = row.id;
+    stepErrors.value = {};
     form.value = {
         name: row.name,
         code: row.code,
@@ -325,16 +342,102 @@ function addStep() {
     });
 }
 
+function removeStep(idx) {
+    form.value.steps.splice(idx, 1);
+    stepErrors.value = {};
+}
+
+function clearStepError(idx) {
+    if (stepErrors.value[idx]) {
+        const next = { ...stepErrors.value };
+        delete next[idx];
+        stepErrors.value = next;
+    }
+}
+
+function validateForm() {
+    const errors = {};
+
+    if (!form.value.name?.trim()) {
+        return { form: 'Workflow name is required.' };
+    }
+    if (!form.value.code?.trim()) {
+        return { form: 'Workflow code is required.' };
+    }
+    if (!selectedOrg.value && !store.organizationId) {
+        return { form: 'Select an organization first.' };
+    }
+
+    form.value.steps.forEach((step, idx) => {
+        const hasRole = !!step.role_id;
+        const hasUsers = Array.isArray(step.approver_user_ids) && step.approver_user_ids.length > 0;
+        if (!hasRole && !hasUsers) {
+            errors[idx] = `Level ${idx + 1} needs an approver role and/or at least one user.`;
+        }
+        if (!step.name?.trim()) {
+            errors[idx] = `Level ${idx + 1} needs a step name.`;
+        }
+    });
+
+    stepErrors.value = errors;
+    return Object.keys(errors).length ? { steps: true } : null;
+}
+
+function formatApiErrors(error) {
+    const payload = error.response?.data;
+    if (!payload) return error.message || 'Unable to save';
+
+    const parts = [];
+    if (payload.message) parts.push(payload.message);
+    if (payload.errors && typeof payload.errors === 'object') {
+        Object.entries(payload.errors).forEach(([key, messages]) => {
+            const list = Array.isArray(messages) ? messages : [messages];
+            list.forEach((msg) => {
+                const match = key.match(/^steps\.(\d+)/);
+                if (match) {
+                    const idx = Number(match[1]);
+                    stepErrors.value = {
+                        ...stepErrors.value,
+                        [idx]: msg.includes('Level') ? msg : `Level ${idx + 1}: ${msg}`,
+                    };
+                    parts.push(`Level ${idx + 1}: ${msg}`);
+                } else {
+                    parts.push(msg);
+                }
+            });
+        });
+    }
+
+    return [...new Set(parts)].join(' · ');
+}
+
 async function saveWorkflow() {
+    const invalid = validateForm();
+    if (invalid) {
+        toast.add({
+            severity: 'warn',
+            summary: 'Cannot save',
+            detail: invalid.form || 'Fix the highlighted approval steps, then try again.',
+            life: 4500,
+        });
+        return;
+    }
+
     saving.value = true;
     try {
         const payload = {
             ...form.value,
+            organization_id: selectedOrg.value || store.organizationId,
             steps: form.value.steps.map((s, idx) => ({
-                ...s,
+                name: s.name,
+                role_id: s.role_id || null,
+                approver_user_ids: s.approver_user_ids || [],
                 step_order: idx + 1,
             })),
         };
+        if (payload.organization_id) {
+            store.setOrganization(payload.organization_id);
+        }
         if (editingId.value) {
             await store.updateWorkflow(editingId.value, payload);
             toast.add({ severity: 'success', summary: 'Workflow updated', life: 2500 });
@@ -343,13 +446,14 @@ async function saveWorkflow() {
             toast.add({ severity: 'success', summary: 'Workflow created', life: 2500 });
         }
         showEditor.value = false;
+        stepErrors.value = {};
         await loadWorkflows();
     } catch (e) {
         toast.add({
             severity: 'error',
             summary: 'Save failed',
-            detail: e.response?.data?.message || e.message,
-            life: 4000,
+            detail: formatApiErrors(e),
+            life: 6000,
         });
     } finally {
         saving.value = false;
@@ -394,11 +498,13 @@ async function confirmAct() {
     acting.value = true;
     try {
         const id = actionTarget.value.id;
-        if (actionType.value === 'approve') await store.approve(id, actionComments.value);
-        if (actionType.value === 'reject') await store.reject(id, actionComments.value);
-        if (actionType.value === 'return') await store.returnInstance(id, actionComments.value);
+        if (actionType.value === 'approve') await store.approve(id, actionComments.value || null);
+        if (actionType.value === 'reject') await store.reject(id, actionComments.value || null);
+        if (actionType.value === 'return') await store.returnInstance(id, actionComments.value || null);
         toast.add({ severity: 'success', summary: `${actionTitle.value}d`, life: 2500 });
         showAction.value = false;
+        acting.value = false;
+        // Refresh lists after UI unlock so the Approve button doesn't spin during reload.
         await Promise.all([loadInbox(), loadHistory()]);
     } catch (e) {
         toast.add({
@@ -407,7 +513,6 @@ async function confirmAct() {
             detail: e.response?.data?.message || e.message,
             life: 4000,
         });
-    } finally {
         acting.value = false;
     }
 }

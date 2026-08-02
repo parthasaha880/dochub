@@ -27,6 +27,13 @@
             </div>
         </div>
 
+        <div
+            v-if="store.error"
+            class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+        >
+            {{ store.error }}
+        </div>
+
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div v-for="card in kpiCards" :key="card.label" class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
                 <p class="text-sm text-slate-500">{{ card.label }}</p>
@@ -125,6 +132,7 @@ import api from '@/services/api';
 import { useDashboardStore } from '@/modules/dashboard/stores/dashboard';
 import StorageReportCard from '@/modules/dashboard/components/StorageReportCard.vue';
 import DiskUsageCard from '@/modules/dashboard/components/DiskUsageCard.vue';
+import { resolveOrganizationId } from '@/utils/organization';
 
 ChartJS.register(
     ArcElement,
@@ -247,16 +255,18 @@ function shortDate(value) {
 async function loadOrgs() {
     const { data } = await api.get('/organizations', { params: { per_page: 100 } });
     organizations.value = data.data.data || data.data;
-    if (!selectedOrg.value && organizations.value.length) {
-        selectedOrg.value = organizations.value[0].id;
-    }
+    selectedOrg.value = resolveOrganizationId(organizations.value, selectedOrg.value);
 }
 
 async function reload() {
     if (!selectedOrg.value) return;
     store.setOrganization(selectedOrg.value);
     store.days = selectedDays.value;
-    await store.fetchSummary({ days: selectedDays.value });
+    try {
+        await store.fetchSummary({ days: selectedDays.value });
+    } catch {
+        // Error message is stored on the dashboard store for the banner.
+    }
 }
 
 onMounted(async () => {

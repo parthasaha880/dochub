@@ -12,6 +12,7 @@ use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Services\DocumentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DocumentController extends Controller
@@ -187,6 +188,14 @@ class DocumentController extends Controller
         $this->authorize('download', $model);
 
         return $this->service->download($document);
+    }
+
+    public function preview(string $document): Response
+    {
+        $model = $this->service->show($document);
+        $this->authorize('preview', $model);
+
+        return $this->service->preview($document);
     }
 
     public function trash(Request $request): JsonResponse

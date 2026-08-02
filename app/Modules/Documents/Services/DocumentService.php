@@ -42,6 +42,8 @@ class DocumentService
     public function upload(array $data, UploadedFile $file, User $actor): Document
     {
         return DB::transaction(function () use ($data, $file, $actor) {
+            $this->assertFolderWritable($data['folder_id'] ?? null);
+
             $stored = $this->storage->store($file, $data['organization_id']);
 
             $document = $this->repository->createDocument([
@@ -145,6 +147,8 @@ class DocumentService
     {
         $document = $this->repository->findDocument($id);
         $this->assertWritable($document, $actor);
+        $this->assertFolderWritable($document->folder_id);
+        $this->assertFolderWritable($folderId);
 
         if ($folderId) {
             $folder = $this->repository->findFolder($folderId);
@@ -162,6 +166,7 @@ class DocumentService
     {
         return DB::transaction(function () use ($id, $folderId, $actor) {
             $source = $this->repository->findDocument($id);
+            $this->assertFolderWritable($folderId ?? $source->folder_id);
 
             $extension = $source->extension ?: 'bin';
             $newPath = 'documents/'.$source->organization_id.'/'.now()->format('Y/m').'/'.Str::uuid().'.'.$extension;
@@ -212,6 +217,13 @@ class DocumentService
     public function checkOut(string $id, User $actor): Document
     {
         $document = $this->repository->findDocument($id);
+        $this->assertFolderWritable($document->folder_id);
+
+        if ($document->is_locked && ! $document->isCheckedOut()) {
+            throw ValidationException::withMessages([
+                'document' => ['Document is locked by its folder. Unlock the folder first.'],
+            ]);
+        }
 
         if ($document->isCheckedOut() && ! $document->isCheckedOutBy($actor)) {
             throw ValidationException::withMessages([
@@ -324,26 +336,123 @@ class DocumentService
         ]);
     }
 
-    public function folderTree(string $organizationId): Collection
+    /**
+     * Stream file for in-app viewing (inline disposition, range-friendly).
+     */
+    public function preview(string $id): \Symfony\Component\HttpFoundation\Response
     {
-        return $this->repository->folderTree($organizationId);
+        $document = $this->repository->findDocument($id);
+
+        if (! $document->path || ! $this->storage->exists($document->disk, $document->path)) {
+            abort(404, 'File not found.');
+        }
+
+        $filename = $document->original_name ?: ($document->title.'.'.$document->extension);
+
+        return Storage::disk($document->disk)->response(
+            $document->path,
+            $filename,
+            [
+                'Content-Type' => $document->mime_type ?: 'application/octet-stream',
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, max-age=120',
+            ],
+            'inline'
+        );
     }
 
-    public function createFolder(array $data): Folder
+    public function folderTree(string $organizationId, bool $includeHidden = false): Collection
     {
+        return $this->repository->folderTree($organizationId, $includeHidden);
+    }
+
+    public function createFolder(array $data, ?User $actor = null): Folder
+    {
+        $this->assertFolderWritable($data['parent_id'] ?? null);
+
+        if ($actor) {
+            $data['created_by'] = $actor->id;
+        }
+
         return $this->repository->createFolder($data);
     }
 
-    public function updateFolder(string $id, array $data): Folder
+    public function updateFolder(string $id, array $data, ?User $actor = null): Folder
     {
         $folder = $this->repository->findFolder($id);
 
-        return $this->repository->updateFolder($folder, $data);
+        $unlocking = array_key_exists('is_locked', $data) && ! $data['is_locked'];
+        if ($folder->is_locked && ! $unlocking) {
+            // Allow hide/unhide and unlock while locked; block rename and other edits.
+            $mutatingKeys = collect($data)->except(['is_locked', 'is_hidden', 'locked_by', 'locked_at', 'updated_by'])->keys();
+            if ($mutatingKeys->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'folder' => ['Folder is locked. Unlock it before making changes.'],
+                ]);
+            }
+        }
+
+        if (array_key_exists('is_locked', $data)) {
+            if ($data['is_locked']) {
+                $data['locked_by'] = $actor?->id;
+                $data['locked_at'] = now();
+            } else {
+                $data['locked_by'] = null;
+                $data['locked_at'] = null;
+            }
+        }
+
+        if ($actor) {
+            $data['updated_by'] = $actor->id;
+        }
+
+        $updated = $this->repository->updateFolder($folder, $data);
+
+        if (array_key_exists('is_locked', $data)) {
+            $this->cascadeFolderLock($updated, (bool) $data['is_locked'], $actor);
+        }
+
+        if (array_key_exists('is_hidden', $data)) {
+            $this->cascadeFolderHide($updated, (bool) $data['is_hidden'], $actor);
+        }
+
+        return $updated->fresh();
+    }
+
+    public function renameFolder(string $id, string $name, User $actor): Folder
+    {
+        return $this->updateFolder($id, ['name' => $name], $actor);
+    }
+
+    public function lockFolder(string $id, User $actor): Folder
+    {
+        return $this->updateFolder($id, ['is_locked' => true], $actor);
+    }
+
+    public function unlockFolder(string $id, User $actor): Folder
+    {
+        return $this->updateFolder($id, ['is_locked' => false], $actor);
+    }
+
+    public function hideFolder(string $id, User $actor): Folder
+    {
+        return $this->updateFolder($id, ['is_hidden' => true], $actor);
+    }
+
+    public function unhideFolder(string $id, User $actor): Folder
+    {
+        return $this->updateFolder($id, ['is_hidden' => false], $actor);
     }
 
     public function deleteFolder(string $id): void
     {
         $folder = $this->repository->findFolder($id);
+
+        if ($folder->is_locked) {
+            throw ValidationException::withMessages([
+                'folder' => ['Folder is locked. Unlock it before deleting.'],
+            ]);
+        }
 
         if ($folder->documents()->exists() || $folder->children()->exists()) {
             throw ValidationException::withMessages([
@@ -352,6 +461,98 @@ class DocumentService
         }
 
         $this->repository->deleteFolder($folder);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function descendantFolderIds(string $rootId): array
+    {
+        $ids = [$rootId];
+        $frontier = [$rootId];
+
+        while ($frontier !== []) {
+            $children = Folder::query()
+                ->whereIn('parent_id', $frontier)
+                ->pluck('id')
+                ->all();
+            $frontier = $children;
+            $ids = array_merge($ids, $children);
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    private function cascadeFolderLock(Folder $folder, bool $locked, ?User $actor): void
+    {
+        $folderIds = $this->descendantFolderIds($folder->id);
+
+        Folder::query()
+            ->whereIn('id', $folderIds)
+            ->where('id', '!=', $folder->id)
+            ->update([
+                'is_locked' => $locked,
+                'locked_by' => $locked ? $actor?->id : null,
+                'locked_at' => $locked ? now() : null,
+                'updated_by' => $actor?->id,
+                'updated_at' => now(),
+            ]);
+
+        if ($locked) {
+            Document::query()
+                ->whereIn('folder_id', $folderIds)
+                ->update([
+                    'is_locked' => true,
+                    'locked_by' => $actor?->id,
+                    'locked_at' => now(),
+                ]);
+
+            return;
+        }
+
+        // Preserve personal check-outs; clear folder locks only.
+        Document::query()
+            ->whereIn('folder_id', $folderIds)
+            ->whereNull('checked_out_by')
+            ->update([
+                'is_locked' => false,
+                'locked_by' => null,
+                'locked_at' => null,
+            ]);
+    }
+
+    private function cascadeFolderHide(Folder $folder, bool $hidden, ?User $actor): void
+    {
+        $folderIds = $this->descendantFolderIds($folder->id);
+
+        Folder::query()
+            ->whereIn('id', $folderIds)
+            ->where('id', '!=', $folder->id)
+            ->update([
+                'is_hidden' => $hidden,
+                'updated_by' => $actor?->id,
+                'updated_at' => now(),
+            ]);
+
+        Document::query()
+            ->whereIn('folder_id', $folderIds)
+            ->update([
+                'is_hidden' => $hidden,
+            ]);
+    }
+
+    private function assertFolderWritable(?string $folderId): void
+    {
+        if (! $folderId) {
+            return;
+        }
+
+        $folder = $this->repository->findFolder($folderId);
+        if ($folder->is_locked) {
+            throw ValidationException::withMessages([
+                'folder_id' => ['Folder is locked. Unlock it before adding or moving documents.'],
+            ]);
+        }
     }
 
     private function createVersion(Document $document, array $stored, string $uploaderId, string $summary): DocumentVersion
@@ -421,6 +622,14 @@ class DocumentService
 
     private function assertWritable(Document $document, User $actor): void
     {
+        $this->assertFolderWritable($document->folder_id);
+
+        if ($document->is_locked && ! $document->isCheckedOut()) {
+            throw ValidationException::withMessages([
+                'document' => ['Document is locked by its folder. Unlock the folder to edit.'],
+            ]);
+        }
+
         if ($document->isCheckedOut() && ! $document->isCheckedOutBy($actor) && ! $actor->hasRole('super_admin')) {
             throw ValidationException::withMessages([
                 'document' => ['Document is checked out and locked for editing.'],

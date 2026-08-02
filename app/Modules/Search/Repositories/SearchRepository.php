@@ -25,7 +25,8 @@ class SearchRepository implements SearchRepositoryInterface
     public function searchDocuments(array $filters, int $perPage = 15): LengthAwarePaginator
     {
         $query = Document::query()
-            ->with(['folder', 'department', 'owner', 'uploader', 'tags', 'checkedOutByUser']);
+            ->with(['folder', 'department', 'owner', 'uploader', 'tags', 'checkedOutByUser'])
+            ->where('is_hidden', false);
 
         if (! empty($filters['organization_id'])) {
             $query->where('organization_id', $filters['organization_id']);

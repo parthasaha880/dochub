@@ -2,7 +2,7 @@
 
 ## Scope (this delivery)
 
-Nested folders, upload / multi-upload / drag-drop UI, metadata, version control, check-in/out locking, move/copy/rename, recycle bin (soft delete / restore / permanent delete), secure download stream (path never exposed to clients).
+Nested folders, upload / multi-upload / drag-drop UI, metadata, version control, check-in/out locking, move/copy/rename, recycle bin (soft delete / restore / permanent delete), in-app preview (PDF, images, video/audio, Word docx, text), secure download stream (path never exposed to clients).
 
 ## Database
 
@@ -22,9 +22,12 @@ Nested folders, upload / multi-upload / drag-drop UI, metadata, version control,
 | Replace version | `POST /documents/{id}/replace` |
 | Rename / move / copy | `POST .../rename|move|copy` |
 | Check-out / check-in | `POST .../check-out|check-in` |
+| Preview (inline) | `GET /documents/{id}/preview` |
 | Download | `GET /documents/{id}/download` |
 | Trash / restore / force | `GET /documents/trash`, `POST .../restore`, `DELETE .../force` |
 | Folder tree / CRUD | `GET /folders/tree`, `POST/PUT/DELETE /folders` |
+
+Public share preview: `GET /public/shares/{token}/preview`
 
 ## Permissions
 
@@ -35,12 +38,16 @@ Nested folders, upload / multi-upload / drag-drop UI, metadata, version control,
 Route: `/documents`
 
 - Organization selector
-- Folder tree + root
+- Folder tree + root with rename / lock / unlock / hide / unhide / delete
+- Toggle to show hidden folders
 - Drag & drop / multi-file upload
-- Document grid with checkout/in, copy, download, recycle bin
+- Document list with **View** (eye) + title click → in-app viewer
+- Checkout/in, copy, move, download, recycle bin
+- Viewer supports PDF, images, video, audio, DOCX, and text; other types offer download
 
 ## Security
 
 - Files stored on configured disk under hashed private paths
-- Downloads streamed via authenticated API (no raw storage path returned)
+- Previews/downloads streamed via authenticated API (no raw storage path returned)
 - Checked-out documents locked from other users’ edits
+- Locked folders block uploads, moves, rename, and delete until unlocked

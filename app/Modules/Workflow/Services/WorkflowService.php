@@ -110,7 +110,7 @@ class WorkflowService
 
     public function submitDocument(string $documentId, User $actor, ?string $workflowId = null, ?string $note = null): WorkflowInstance
     {
-        return DB::transaction(function () use ($documentId, $actor, $workflowId, $note) {
+        $instance = DB::transaction(function () use ($documentId, $actor, $workflowId, $note) {
             $document = Document::query()->findOrFail($documentId);
 
             if ($this->repository->findActiveInstanceForDocument($document->id)) {
@@ -197,15 +197,18 @@ class WorkflowService
                 $document->organization_id,
                 $actor
             );
-            $this->notifyStepApprovers($instance, 'submitted');
 
             return $instance;
         });
+
+        $this->notifyStepApprovers($instance, 'submitted', $actor);
+
+        return $instance;
     }
 
     public function approve(string $instanceId, User $actor, ?string $comments = null): WorkflowInstance
     {
-        return DB::transaction(function () use ($instanceId, $actor, $comments) {
+        $instance = DB::transaction(function () use ($instanceId, $actor, $comments) {
             $instance = $this->repository->findInstance($instanceId);
             $this->assertInProgress($instance);
             $step = $this->assertCanAct($instance, $actor);
@@ -243,19 +246,21 @@ class WorkflowService
             $instance = $this->repository->findInstance($instance->id);
             $this->audit->log('workflow', 'workflow.approved', 'Workflow step approved', $instance, null, null, null, $instance->organization_id, $actor);
 
-            if ($instance->status === WorkflowInstanceStatus::Approved) {
-                $this->notifySubmitter($instance, 'approved');
-            } elseif ($instance->currentStep) {
-                $this->notifyStepApprovers($instance, 'submitted');
-            }
-
             return $instance;
         });
+
+        if ($instance->status === WorkflowInstanceStatus::Approved) {
+            $this->notifySubmitter($instance, 'approved');
+        } elseif ($instance->currentStep) {
+            $this->notifyStepApprovers($instance, 'submitted', $actor);
+        }
+
+        return $instance;
     }
 
     public function reject(string $instanceId, User $actor, ?string $comments = null): WorkflowInstance
     {
-        return DB::transaction(function () use ($instanceId, $actor, $comments) {
+        $instance = DB::transaction(function () use ($instanceId, $actor, $comments) {
             $instance = $this->repository->findInstance($instanceId);
             $this->assertInProgress($instance);
             $step = $this->assertCanAct($instance, $actor);
@@ -281,15 +286,18 @@ class WorkflowService
 
             $instance = $this->repository->findInstance($instance->id);
             $this->audit->log('workflow', 'workflow.rejected', 'Document rejected', $instance, null, ['comments' => $comments], null, $instance->organization_id, $actor);
-            $this->notifySubmitter($instance, 'rejected', $comments);
 
             return $instance;
         });
+
+        $this->notifySubmitter($instance, 'rejected', $comments);
+
+        return $instance;
     }
 
     public function returnToSubmitter(string $instanceId, User $actor, ?string $comments = null): WorkflowInstance
     {
-        return DB::transaction(function () use ($instanceId, $actor, $comments) {
+        $instance = DB::transaction(function () use ($instanceId, $actor, $comments) {
             $instance = $this->repository->findInstance($instanceId);
             $this->assertInProgress($instance);
             $step = $this->assertCanAct($instance, $actor);
@@ -315,15 +323,18 @@ class WorkflowService
 
             $instance = $this->repository->findInstance($instance->id);
             $this->audit->log('workflow', 'workflow.returned', 'Document returned', $instance, null, ['comments' => $comments], null, $instance->organization_id, $actor);
-            $this->notifySubmitter($instance, 'returned', $comments);
 
             return $instance;
         });
+
+        $this->notifySubmitter($instance, 'returned', $comments);
+
+        return $instance;
     }
 
     public function cancel(string $instanceId, User $actor, ?string $comments = null): WorkflowInstance
     {
-        return DB::transaction(function () use ($instanceId, $actor, $comments) {
+        $instance = DB::transaction(function () use ($instanceId, $actor, $comments) {
             $instance = $this->repository->findInstance($instanceId);
 
             if ($instance->status !== WorkflowInstanceStatus::InProgress) {
@@ -362,10 +373,13 @@ class WorkflowService
 
             $instance = $this->repository->findInstance($instance->id);
             $this->audit->log('workflow', 'workflow.cancelled', 'Workflow cancelled', $instance, null, null, null, $instance->organization_id, $actor);
-            $this->notifySubmitter($instance, 'cancelled', $comments);
 
             return $instance;
         });
+
+        $this->notifySubmitter($instance, 'cancelled', $comments);
+
+        return $instance;
     }
 
     public function inbox(User $user, array $filters, int $perPage = 15): LengthAwarePaginator
@@ -460,8 +474,9 @@ class WorkflowService
             $hasUsers = ! empty($step['approver_user_ids']);
 
             if (! $hasRole && ! $hasUsers) {
+                $level = $index + 1;
                 throw ValidationException::withMessages([
-                    "steps.{$index}" => ['Each step needs a role and/or specific approver users.'],
+                    "steps.{$index}" => ["Level {$level} needs an approver role and/or at least one user."],
                 ]);
             }
         }
@@ -475,7 +490,7 @@ class WorkflowService
         }
     }
 
-    private function notifyStepApprovers(WorkflowInstance $instance, string $event): void
+    private function notifyStepApprovers(WorkflowInstance $instance, string $event, ?User $except = null): void
     {
         $instance->loadMissing(['currentStep.role', 'currentStep.approvers', 'document']);
         $step = $instance->currentStep;
@@ -485,10 +500,16 @@ class WorkflowService
 
         $recipients = collect($step->approvers);
         if ($step->role_id && $step->role) {
-            $recipients = $recipients->merge(User::role($step->role->name)->get());
+            $recipients = $recipients->merge(
+                User::role($step->role->name)->select(['users.id', 'users.name', 'users.email'])->get()
+            );
         }
 
-        $recipients = $recipients->unique('id')->filter();
+        $recipients = $recipients
+            ->unique('id')
+            ->filter(fn (User $user) => ! $except || $user->id !== $except->id)
+            ->values();
+
         if ($recipients->isNotEmpty()) {
             Notification::send($recipients, new WorkflowActivityNotification($event, $instance));
         }

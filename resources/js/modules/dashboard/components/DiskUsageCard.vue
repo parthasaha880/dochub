@@ -8,7 +8,7 @@
                 <Chart v-if="chartData" type="doughnut" :data="chartData" :options="chartOptions" class="h-44" />
                 <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
                     <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                        {{ disk?.quota_gb ?? 10 }}.0 GB
+                        {{ centerLabel }}
                     </span>
                 </div>
             </div>
@@ -88,6 +88,16 @@ const chartOptions = {
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
 };
+
+const centerLabel = computed(() => {
+    if (!props.disk) return '—';
+    const used = Number(props.disk.used_bytes || 0);
+    const quotaGb = Number(props.disk.quota_gb || 0);
+    if (used > 0) {
+        return formatGb(used).replace(' GB', '') + ' GB';
+    }
+    return quotaGb ? `${Number(quotaGb).toFixed(1)} GB` : '—';
+});
 
 function formatGb(bytes) {
     const n = Number(bytes || 0);

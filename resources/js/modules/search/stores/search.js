@@ -25,8 +25,18 @@ export const useSearchStore = defineStore('search', () => {
                 },
             });
             const payload = data.data;
-            results.value = payload.data || payload;
-            meta.value = payload.meta || null;
+            // Laravel Resource::collection(paginator)->getData(true) => { data, links, meta }
+            // Guard against double-wrapped shapes from ApiResponse.
+            if (Array.isArray(payload)) {
+                results.value = payload;
+                meta.value = data.meta || null;
+            } else if (payload && Array.isArray(payload.data)) {
+                results.value = payload.data;
+                meta.value = payload.meta || data.meta || null;
+            } else {
+                results.value = [];
+                meta.value = null;
+            }
             return payload;
         } finally {
             loading.value = false;

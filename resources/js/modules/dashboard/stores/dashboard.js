@@ -4,6 +4,7 @@ import api from '@/services/api';
 
 export const useDashboardStore = defineStore('dashboard', () => {
     const loading = ref(false);
+    const error = ref(null);
     const organizationId = ref(localStorage.getItem('edams_org_id') || null);
     const days = ref(30);
     const summary = ref(null);
@@ -16,10 +17,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     async function fetchSummary(params = {}) {
         if (!organizationId.value) {
             summary.value = null;
+            error.value = null;
             return null;
         }
 
         loading.value = true;
+        error.value = null;
         try {
             const { data } = await api.get('/dashboard/summary', {
                 params: {
@@ -29,6 +32,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
             });
             summary.value = data.data;
             return summary.value;
+        } catch (e) {
+            summary.value = null;
+            error.value = e.response?.data?.message || e.message || 'Failed to load dashboard';
+            throw e;
         } finally {
             loading.value = false;
         }
@@ -36,6 +43,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     return {
         loading,
+        error,
         organizationId,
         days,
         summary,
