@@ -23,6 +23,7 @@ class AdminUserResource extends JsonResource
             'last_login_at' => $this->last_login_at,
             'last_login_ip' => $this->last_login_ip,
             'locked_until' => $this->locked_until,
+            'is_locked' => $this->isLocked(),
             'timezone' => $this->timezone,
             'locale' => $this->locale,
             'theme' => $this->theme,

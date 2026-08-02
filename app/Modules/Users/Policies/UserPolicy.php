@@ -30,4 +30,9 @@ class UserPolicy
     {
         return $user->can('users.manage') && $user->id !== $model->id;
     }
+
+    public function unlock(User $user, User $model): bool
+    {
+        return $user->hasRole('super_admin');
+    }
 }

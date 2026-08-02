@@ -197,12 +197,26 @@ class AuthService
         $user = User::query()->where('email', $email)->where('is_active', true)->first();
 
         if ($user) {
+            if ($user->isLocked()) {
+                throw ValidationException::withMessages([
+                    'email' => [
+                        'This account is locked until '.$user->locked_until->timezone(config('app.timezone'))->format('M j, Y g:i A')
+                        .'. Contact a superadmin to unlock.',
+                    ],
+                ]);
+            }
+
+            $this->enforcePasswordResetOtpRequestLimits($user);
+
             $code = (string) random_int(100000, 999999);
 
             PasswordResetOtp::query()
                 ->where('user_id', $user->id)
                 ->whereNull('consumed_at')
-                ->update(['consumed_at' => now()]);
+                ->update([
+                    'consumed_at' => now(),
+                    'expires_at' => now(),
+                ]);
 
             PasswordResetOtp::query()->create([
                 'user_id' => $user->id,
@@ -285,6 +299,59 @@ class AuthService
         ];
     }
 
+    private function enforcePasswordResetOtpRequestLimits(User $user): void
+    {
+        $maxPer30 = max(1, (int) config('edams.password_reset_otp_max_per_30_minutes', 4));
+        $maxPerDay = max(1, (int) config('edams.password_reset_otp_max_per_day', 7));
+        $lockHours = max(1, (int) config('edams.password_reset_lock_hours', 72));
+
+        $count30 = PasswordResetOtp::query()
+            ->where('user_id', $user->id)
+            ->where('created_at', '>=', now()->subMinutes(30))
+            ->count();
+
+        $countDay = PasswordResetOtp::query()
+            ->where('user_id', $user->id)
+            ->where('created_at', '>=', now()->subDay())
+            ->count();
+
+        if ($count30 < $maxPer30 && $countDay < $maxPerDay) {
+            return;
+        }
+
+        $this->lockAccountForPasswordResetAbuse($user, $lockHours);
+
+        throw ValidationException::withMessages([
+            'email' => [
+                'Too many recovery OTP requests (max '.$maxPer30.' per 30 minutes, '.$maxPerDay.' per day). '
+                .'Account locked for '.$lockHours.' hours. Contact a superadmin to unlock.',
+            ],
+            'account_locked' => ['true'],
+        ]);
+    }
+
+    private function lockAccountForPasswordResetAbuse(User $user, int $lockHours): void
+    {
+        PasswordResetOtp::query()
+            ->where('user_id', $user->id)
+            ->whereNull('consumed_at')
+            ->update([
+                'consumed_at' => now(),
+                'expires_at' => now(),
+            ]);
+
+        $user->lockUntil(now()->addHours($lockHours));
+        $user->tokens()->delete();
+    }
+
+    private function expirePasswordResetOtp(PasswordResetOtp $otp): void
+    {
+        $otp->forceFill([
+            'consumed_at' => now(),
+            'expires_at' => now(),
+        ])->save();
+    }
+
     private function resolveActivePasswordResetOtp(string $email, string $code): PasswordResetOtp
     {
         $email = Str::lower(trim($email));
@@ -297,6 +364,16 @@ class AuthService
             ]);
         }
 
+        if ($user->isLocked()) {
+            throw ValidationException::withMessages([
+                'email' => [
+                    'This account is locked until '.$user->locked_until->timezone(config('app.timezone'))->format('M j, Y g:i A')
+                    .'. Contact a superadmin to unlock.',
+                ],
+                'account_locked' => ['true'],
+            ]);
+        }
+
         $otp = PasswordResetOtp::query()
             ->where('user_id', $user->id)
             ->whereNull('consumed_at')
@@ -306,27 +383,44 @@ class AuthService
         if (! $otp) {
             throw ValidationException::withMessages([
                 'otp' => ['No active recovery code found. Please request a new one.'],
+                'recovery_cancelled' => ['true'],
             ]);
         }
 
         if ($otp->isExpired()) {
+            $this->expirePasswordResetOtp($otp);
             throw ValidationException::withMessages([
                 'otp' => ['This code has expired. Please request a new one.'],
+                'recovery_cancelled' => ['true'],
             ]);
         }
 
-        $maxAttempts = max(1, (int) config('edams.password_reset_otp_max_attempts', 5));
+        $maxAttempts = max(1, (int) config('edams.password_reset_otp_max_attempts', 3));
         if ($otp->attempts >= $maxAttempts) {
-            $otp->forceFill(['consumed_at' => now()])->save();
+            $this->expirePasswordResetOtp($otp);
             throw ValidationException::withMessages([
-                'otp' => ['Too many invalid attempts. Please request a new code.'],
+                'otp' => ['Too many incorrect attempts. Recovery cancelled and the code has expired. Please start again.'],
+                'recovery_cancelled' => ['true'],
             ]);
         }
 
         if (! hash_equals($otp->code, $code)) {
             $otp->increment('attempts');
+            $otp->refresh();
+
+            if ($otp->attempts >= $maxAttempts) {
+                $this->expirePasswordResetOtp($otp);
+
+                throw ValidationException::withMessages([
+                    'otp' => ['Too many incorrect attempts. Recovery cancelled and the code has expired. Please start again.'],
+                    'recovery_cancelled' => ['true'],
+                ]);
+            }
+
+            $remaining = $maxAttempts - $otp->attempts;
+
             throw ValidationException::withMessages([
-                'otp' => ['Invalid recovery code.'],
+                'otp' => ['Invalid recovery code. '.$remaining.' attempt'.($remaining === 1 ? '' : 's').' remaining.'],
             ]);
         }
 

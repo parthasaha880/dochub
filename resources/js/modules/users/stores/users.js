@@ -38,6 +38,11 @@ export const useUsersStore = defineStore('users', () => {
         return data;
     }
 
+    async function unlockUser(id) {
+        const { data } = await api.post(`/users/${id}/unlock`);
+        return data;
+    }
+
     async function fetchRoles(params = {}) {
         loading.value = true;
         try {
@@ -114,6 +119,7 @@ export const useUsersStore = defineStore('users', () => {
         updateUser,
         deleteUser,
         resendWelcomeEmail,
+        unlockUser,
         fetchRoles,
         createRole,
         updateRole,

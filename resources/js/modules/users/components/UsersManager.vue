@@ -27,11 +27,29 @@
             </Column>
             <Column field="is_active" header="Active">
                 <template #body="{ data }">
-                    <Tag :value="data.is_active ? 'Active' : 'Inactive'" :severity="data.is_active ? 'success' : 'danger'" />
+                    <div class="flex flex-wrap gap-1">
+                        <Tag :value="data.is_active ? 'Active' : 'Inactive'" :severity="data.is_active ? 'success' : 'danger'" />
+                        <Tag
+                            v-if="data.is_locked"
+                            value="Locked"
+                            severity="warn"
+                            v-tooltip.top="data.locked_until ? `Until ${formatLockUntil(data.locked_until)}` : 'Locked'"
+                        />
+                    </div>
                 </template>
             </Column>
-            <Column header="Actions" style="width: 10rem">
+            <Column header="Actions" style="width: 12rem">
                 <template #body="{ data }">
+                    <Button
+                        v-if="isSuperAdmin && data.is_locked"
+                        icon="pi pi-lock-open"
+                        text
+                        rounded
+                        severity="warn"
+                        v-tooltip.top="'Unlock account'"
+                        :loading="unlockingId === data.id"
+                        @click="unlockAccount(data)"
+                    />
                     <Button
                         icon="pi pi-envelope"
                         text
@@ -102,7 +120,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import Column from 'primevue/column';
@@ -115,9 +133,11 @@ import Select from 'primevue/select';
 import Tag from 'primevue/tag';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
+import { useAuthStore } from '@/modules/auth/stores/auth';
 import { useUsersStore } from '@/modules/users/stores/users';
 
 const store = useUsersStore();
+const auth = useAuthStore();
 const toast = useToast();
 const confirm = useConfirm();
 
@@ -125,10 +145,22 @@ const rows = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const resendingId = ref(null);
+const unlockingId = ref(null);
 const search = ref('');
 const roleFilter = ref(null);
 const dialogVisible = ref(false);
 const editingId = ref(null);
+
+const isSuperAdmin = computed(() => (auth.user?.roles || []).includes('super_admin'));
+
+function formatLockUntil(value) {
+    if (!value) return '';
+    try {
+        return new Date(value).toLocaleString();
+    } catch {
+        return value;
+    }
+}
 
 const form = reactive({
     name: '',
@@ -261,6 +293,38 @@ async function resendWelcome(row) {
                 });
             } finally {
                 resendingId.value = null;
+            }
+        },
+    });
+}
+
+function unlockAccount(row) {
+    confirm.require({
+        message: `Unlock account for ${row.email}?`,
+        header: 'Unlock account',
+        icon: 'pi pi-lock-open',
+        accept: async () => {
+            unlockingId.value = row.id;
+            try {
+                const result = await store.unlockUser(row.id);
+                toast.add({
+                    severity: 'success',
+                    summary: 'Unlocked',
+                    detail: result.message || 'Account unlocked successfully',
+                    life: 3000,
+                });
+                await load();
+            } catch (error) {
+                toast.add({
+                    severity: 'error',
+                    summary: 'Unlock failed',
+                    detail: error.response?.data?.errors?.user?.[0]
+                        || error.response?.data?.message
+                        || 'Unable to unlock account',
+                    life: 4500,
+                });
+            } finally {
+                unlockingId.value = null;
             }
         },
     });

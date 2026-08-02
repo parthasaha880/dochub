@@ -203,12 +203,20 @@ async function sendOtp() {
             life: 4500,
         });
     } catch (error) {
+        const errors = error.response?.data?.errors;
+        const detail =
+            errors?.email?.[0]
+            || error.response?.data?.message
+            || 'Unable to send recovery code';
         toast.add({
             severity: 'error',
-            summary: 'Request failed',
-            detail: error.response?.data?.message || 'Unable to send recovery code',
-            life: 4000,
+            summary: errors?.account_locked ? 'Account locked' : 'Request failed',
+            detail,
+            life: 5500,
         });
+        if (errors?.account_locked) {
+            backToEmail();
+        }
     } finally {
         loading.value = false;
     }
@@ -237,14 +245,29 @@ async function verifyOtp() {
             life: 3500,
         });
     } catch (error) {
-        toast.add({
-            severity: 'error',
-            summary: 'Invalid OTP',
-            detail: error.response?.data?.errors?.otp?.[0]
-                || error.response?.data?.message
-                || 'Recovery code did not match',
-            life: 4500,
-        });
+        const errors = error.response?.data?.errors;
+        const detail =
+            errors?.otp?.[0]
+            || errors?.email?.[0]
+            || error.response?.data?.message
+            || 'Recovery code did not match';
+
+        if (errors?.recovery_cancelled || errors?.account_locked) {
+            backToEmail();
+            toast.add({
+                severity: 'error',
+                summary: errors?.account_locked ? 'Account locked' : 'Recovery cancelled',
+                detail,
+                life: 5500,
+            });
+        } else {
+            toast.add({
+                severity: 'error',
+                summary: 'Invalid OTP',
+                detail,
+                life: 4500,
+            });
+        }
     } finally {
         loading.value = false;
     }
@@ -271,19 +294,25 @@ async function resetWithOtp() {
         toast.add({ severity: 'success', summary: data.message || 'Password updated', life: 4000 });
         router.push({ name: 'login' });
     } catch (error) {
-        const otpError = error.response?.data?.errors?.otp?.[0];
-        if (otpError) {
+        const errors = error.response?.data?.errors;
+        const otpError = errors?.otp?.[0];
+        if (otpError || errors?.recovery_cancelled || errors?.account_locked) {
             otpVerified.value = false;
-            step.value = 2;
+            if (errors?.recovery_cancelled || errors?.account_locked) {
+                backToEmail();
+            } else {
+                step.value = 2;
+            }
         }
         toast.add({
             severity: 'error',
-            summary: 'Reset failed',
+            summary: errors?.account_locked ? 'Account locked' : 'Reset failed',
             detail: otpError
-                || error.response?.data?.errors?.password?.[0]
+                || errors?.email?.[0]
+                || errors?.password?.[0]
                 || error.response?.data?.message
                 || 'Unable to reset password',
-            life: 4500,
+            life: 5000,
         });
     } finally {
         loading.value = false;

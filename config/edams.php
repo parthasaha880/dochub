@@ -37,5 +37,8 @@ return [
     |--------------------------------------------------------------------------
     */
     'password_reset_otp_ttl_minutes' => (int) env('EDAMS_PASSWORD_RESET_OTP_TTL', 10),
-    'password_reset_otp_max_attempts' => (int) env('EDAMS_PASSWORD_RESET_OTP_ATTEMPTS', 5),
+    'password_reset_otp_max_attempts' => (int) env('EDAMS_PASSWORD_RESET_OTP_ATTEMPTS', 3),
+    'password_reset_otp_max_per_30_minutes' => (int) env('EDAMS_PASSWORD_RESET_OTP_MAX_30M', 4),
+    'password_reset_otp_max_per_day' => (int) env('EDAMS_PASSWORD_RESET_OTP_MAX_DAY', 7),
+    'password_reset_lock_hours' => (int) env('EDAMS_PASSWORD_RESET_LOCK_HOURS', 72),
 ];

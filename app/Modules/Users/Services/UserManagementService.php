@@ -75,6 +75,27 @@ class UserManagementService
         return $user;
     }
 
+    public function unlockUser(string $id, User $actor): User
+    {
+        $user = $this->repository->findUser($id);
+
+        if ($actor->id === $user->id) {
+            throw ValidationException::withMessages([
+                'user' => ['You cannot unlock your own account this way.'],
+            ]);
+        }
+
+        if (! $user->isLocked()) {
+            throw ValidationException::withMessages([
+                'user' => ['This account is not locked.'],
+            ]);
+        }
+
+        $user->unlockAccount();
+
+        return $user->fresh()->load(['roles', 'permissions']);
+    }
+
     private function sendWelcomeEmail(User $user, ?string $temporaryPassword = null): void
     {
         try {

@@ -81,4 +81,17 @@ class UserController extends Controller
             'Welcome email sent to '.$model->email
         );
     }
+
+    public function unlock(Request $request, string $user): JsonResponse
+    {
+        $model = $this->service->showUser($user);
+        $this->authorize('unlock', $model);
+
+        $unlocked = $this->service->unlockUser($user, $request->user());
+
+        return ApiResponse::success(
+            new AdminUserResource($unlocked),
+            'Account unlocked successfully'
+        );
+    }
 }

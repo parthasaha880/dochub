@@ -23,6 +23,12 @@ class AuthDemoSeeder extends Seeder
                 'username' => 'superadmin',
                 'employee_id' => 'EMP-0002',
             ],
+            [
+                'email' => 'jahid@softcellbd.net',
+                'name' => 'Jahid Hasan',
+                'username' => 'jahid',
+                'employee_id' => 'EMP-0003',
+            ],
         ];
 
         foreach ($admins as $row) {

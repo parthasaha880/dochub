@@ -132,4 +132,20 @@ class User extends Authenticatable implements MustVerifyEmail
 
         $this->forceFill($attributes)->save();
     }
+
+    public function lockUntil(\DateTimeInterface $until): void
+    {
+        $this->forceFill([
+            'locked_until' => $until,
+            'failed_login_attempts' => 0,
+        ])->save();
+    }
+
+    public function unlockAccount(): void
+    {
+        $this->forceFill([
+            'locked_until' => null,
+            'failed_login_attempts' => 0,
+        ])->save();
+    }
 }
