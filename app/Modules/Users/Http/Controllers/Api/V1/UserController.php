@@ -68,4 +68,17 @@ class UserController extends Controller
 
         return ApiResponse::success(null, 'User deleted successfully');
     }
+
+    public function resendWelcome(string $user): JsonResponse
+    {
+        $model = $this->service->showUser($user);
+        $this->authorize('update', $model);
+
+        $this->service->resendWelcomeEmail($user);
+
+        return ApiResponse::success(
+            new AdminUserResource($model->fresh()->load(['roles', 'permissions'])),
+            'Welcome email sent to '.$model->email
+        );
+    }
 }

@@ -6,6 +6,7 @@ use App\Core\Traits\Auditable;
 use App\Core\Traits\HasUuid;
 use App\Modules\Authentication\Models\LoginActivity;
 use App\Modules\Authentication\Models\UserDevice;
+use App\Modules\Authentication\Notifications\WelcomeUserNotification;
 use App\Modules\Organization\Models\Employee;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -90,6 +91,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function employee(): HasOne
     {
         return $this->hasOne(Employee::class);
+    }
+
+    /**
+     * Prefer an explicit recipient on welcome notifications (new account / new email).
+     */
+    public function routeNotificationForMail(object $notification): string
+    {
+        if ($notification instanceof WelcomeUserNotification && filled($notification->recipientEmail)) {
+            return (string) $notification->recipientEmail;
+        }
+
+        return (string) $this->email;
     }
 
     public function isLocked(): bool

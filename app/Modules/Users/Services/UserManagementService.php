@@ -30,10 +30,11 @@ class UserManagementService
 
     public function createUser(array $data): User
     {
-        return DB::transaction(function () use ($data) {
+        $temporaryPassword = is_string($data['password'] ?? null) ? $data['password'] : null;
+
+        $user = DB::transaction(function () use ($data) {
             $roles = $data['roles'] ?? [];
             $directPermissions = $data['permissions'] ?? [];
-            $temporaryPassword = $data['password'] ?? null;
             unset($data['roles'], $data['permissions']);
 
             if (! empty($data['password'])) {
@@ -50,14 +51,44 @@ class UserManagementService
                 $user->syncPermissions($directPermissions);
             }
 
-            $user = $user->load(['roles', 'permissions']);
-
-            $user->notify(new WelcomeUserNotification(
-                temporaryPassword: is_string($temporaryPassword) ? $temporaryPassword : null,
-            ));
-
-            return $user;
+            return $user->load(['roles', 'permissions']);
         });
+
+        // Always send after commit, explicitly to the new user's email.
+        try {
+            $this->sendWelcomeEmail($user, $temporaryPassword);
+        } catch (ValidationException $e) {
+            throw ValidationException::withMessages([
+                'email' => ['User was created, but the welcome email could not be sent to '.$user->email.'. Use Resend welcome email to try again.'],
+            ]);
+        }
+
+        return $user;
+    }
+
+    public function resendWelcomeEmail(string $id): User
+    {
+        $user = $this->repository->findUser($id);
+
+        $this->sendWelcomeEmail($user);
+
+        return $user;
+    }
+
+    private function sendWelcomeEmail(User $user, ?string $temporaryPassword = null): void
+    {
+        try {
+            $user->notify(new WelcomeUserNotification(
+                temporaryPassword: $temporaryPassword,
+                recipientEmail: (string) $user->email,
+            ));
+        } catch (\Throwable $e) {
+            report($e);
+
+            throw ValidationException::withMessages([
+                'email' => ['Welcome email could not be sent to '.$user->email.'. ('.$e->getMessage().')'],
+            ]);
+        }
     }
 
     public function updateUser(string $id, array $data, User $actor): User

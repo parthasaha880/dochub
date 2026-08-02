@@ -6,6 +6,7 @@ use App\Modules\Users\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum'])->group(function (): void {
+    Route::post('users/{user}/resend-welcome', [UserController::class, 'resendWelcome']);
     Route::apiResource('users', UserController::class);
 
     Route::get('roles/options/list', [RoleController::class, 'options']);

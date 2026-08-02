@@ -30,10 +30,18 @@
                     <Tag :value="data.is_active ? 'Active' : 'Inactive'" :severity="data.is_active ? 'success' : 'danger'" />
                 </template>
             </Column>
-            <Column header="Actions" style="width: 8rem">
+            <Column header="Actions" style="width: 10rem">
                 <template #body="{ data }">
-                    <Button icon="pi pi-pencil" text rounded @click="openEdit(data)" />
-                    <Button icon="pi pi-trash" text rounded severity="danger" @click="confirmDelete(data)" />
+                    <Button
+                        icon="pi pi-envelope"
+                        text
+                        rounded
+                        v-tooltip.top="'Resend welcome email'"
+                        :loading="resendingId === data.id"
+                        @click="resendWelcome(data)"
+                    />
+                    <Button icon="pi pi-pencil" text rounded v-tooltip.top="'Edit'" @click="openEdit(data)" />
+                    <Button icon="pi pi-trash" text rounded severity="danger" v-tooltip.top="'Delete'" @click="confirmDelete(data)" />
                 </template>
             </Column>
         </DataTable>
@@ -116,6 +124,7 @@ const confirm = useConfirm();
 const rows = ref([]);
 const loading = ref(false);
 const saving = ref(false);
+const resendingId = ref(null);
 const search = ref('');
 const roleFilter = ref(null);
 const dialogVisible = ref(false);
@@ -218,6 +227,40 @@ function confirmDelete(row) {
                     detail: error.response?.data?.message || 'Unable to delete',
                     life: 4000,
                 });
+            }
+        },
+    });
+}
+
+async function resendWelcome(row) {
+    confirm.require({
+        message: `Resend welcome email to ${row.email}?`,
+        header: 'Resend welcome email',
+        icon: 'pi pi-envelope',
+        accept: async () => {
+            resendingId.value = row.id;
+            try {
+                const result = await store.resendWelcomeEmail(row.id);
+                toast.add({
+                    severity: 'success',
+                    summary: 'Email sent',
+                    detail: result.message || `Welcome email sent to ${row.email}`,
+                    life: 3000,
+                });
+            } catch (error) {
+                const errors = error.response?.data?.errors;
+                const detail =
+                    errors?.email?.[0] ||
+                    error.response?.data?.message ||
+                    'Unable to send welcome email';
+                toast.add({
+                    severity: 'error',
+                    summary: 'Resend failed',
+                    detail,
+                    life: 5000,
+                });
+            } finally {
+                resendingId.value = null;
             }
         },
     });

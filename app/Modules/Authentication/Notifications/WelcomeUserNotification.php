@@ -12,6 +12,7 @@ class WelcomeUserNotification extends Notification
 
     public function __construct(
         public ?string $temporaryPassword = null,
+        public ?string $recipientEmail = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -21,12 +22,14 @@ class WelcomeUserNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        $email = $this->recipientEmail ?: (string) $notifiable->email;
+
         return (new MailMessage)
             ->subject('Welcome to EDAMS — your account is ready')
             ->from(config('mail.from.address'), config('mail.from.name'))
             ->view('emails.welcome', [
                 'name' => $notifiable->name,
-                'email' => $notifiable->email,
+                'email' => $email,
                 'temporaryPassword' => $this->temporaryPassword,
                 'loginUrl' => url('/login'),
             ]);

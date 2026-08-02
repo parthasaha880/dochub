@@ -33,6 +33,11 @@ export const useUsersStore = defineStore('users', () => {
         return data;
     }
 
+    async function resendWelcomeEmail(id) {
+        const { data } = await api.post(`/users/${id}/resend-welcome`);
+        return data;
+    }
+
     async function fetchRoles(params = {}) {
         loading.value = true;
         try {
@@ -108,6 +113,7 @@ export const useUsersStore = defineStore('users', () => {
         createUser,
         updateUser,
         deleteUser,
+        resendWelcomeEmail,
         fetchRoles,
         createRole,
         updateRole,
