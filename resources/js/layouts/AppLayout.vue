@@ -212,7 +212,7 @@ function onMenuClick() {
     toggleMobile();
 }
 
-const navItems = [
+const allNavItems = [
     { label: 'Dashboard', to: 'dashboard', icon: 'pi-home' },
     { label: 'Organization', to: 'organization', icon: 'pi-building' },
     { label: 'Documents', to: 'documents', icon: 'pi-folder' },
@@ -220,10 +220,15 @@ const navItems = [
     { label: 'Workflow', to: 'workflow', icon: 'pi-sitemap' },
     { label: 'Operations', to: 'operations', icon: 'pi-cog' },
     { label: 'Users & Roles', to: 'users', icon: 'pi-users' },
+    { label: 'OTP Book', to: 'otp-book', icon: 'pi-key', permission: 'otp.view' },
     { label: 'Login Activity', to: 'login-activity', icon: 'pi-history' },
     { label: 'Devices', to: 'sessions', icon: 'pi-desktop' },
     { label: 'Software Manual', to: 'manual', icon: 'pi-book' },
 ];
+
+const navItems = computed(() =>
+    allNavItems.filter((item) => !item.permission || auth.hasPermission(item.permission))
+);
 
 const userMenuItems = [
     {

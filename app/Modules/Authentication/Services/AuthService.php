@@ -8,6 +8,10 @@ use App\Modules\Authentication\Enums\LoginStatus;
 use App\Modules\Authentication\Events\LoginFailed;
 use App\Modules\Authentication\Events\UserLoggedIn;
 use App\Modules\Authentication\Events\UserLoggedOut;
+use App\Modules\Authentication\Models\EmailChangeOtp;
+use App\Modules\Authentication\Models\PasswordResetOtp;
+use App\Modules\Authentication\Notifications\EmailChangeOtpNotification;
+use App\Modules\Authentication\Notifications\PasswordResetOtpNotification;
 use App\Modules\Authentication\Repositories\Contracts\AuthRepositoryInterface;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\Events\Verified;
@@ -180,6 +184,112 @@ class AuthService
         return Password::sendResetLink(['email' => strtolower($email)]);
     }
 
+    /**
+     * Send password recovery OTP. Always returns success metadata so emails
+     * cannot be enumerated by the public forgot-password endpoint.
+     *
+     * @return array{sent: bool, expires_in_minutes: int}
+     */
+    public function requestPasswordResetOtp(string $email, Request $request): array
+    {
+        $email = Str::lower(trim($email));
+        $ttl = max(1, (int) config('edams.password_reset_otp_ttl_minutes', 10));
+        $user = User::query()->where('email', $email)->where('is_active', true)->first();
+
+        if ($user) {
+            $code = (string) random_int(100000, 999999);
+
+            PasswordResetOtp::query()
+                ->where('user_id', $user->id)
+                ->whereNull('consumed_at')
+                ->update(['consumed_at' => now()]);
+
+            PasswordResetOtp::query()->create([
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'code' => $code,
+                'expires_at' => now()->addMinutes($ttl),
+                'ip_address' => $request->ip(),
+                'user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
+            ]);
+
+            $user->notify(new PasswordResetOtpNotification($code, $ttl));
+        }
+
+        return [
+            'sent' => true,
+            'expires_in_minutes' => $ttl,
+        ];
+    }
+
+    public function resetPasswordWithOtp(array $data): User
+    {
+        $email = Str::lower(trim((string) $data['email']));
+        $code = trim((string) $data['otp']);
+        $password = (string) $data['password'];
+
+        $user = User::query()->where('email', $email)->where('is_active', true)->first();
+        if (! $user) {
+            throw ValidationException::withMessages([
+                'email' => ['We could not reset the password for this email.'],
+            ]);
+        }
+
+        $otp = PasswordResetOtp::query()
+            ->where('user_id', $user->id)
+            ->whereNull('consumed_at')
+            ->latest()
+            ->first();
+
+        if (! $otp) {
+            throw ValidationException::withMessages([
+                'otp' => ['No active recovery code found. Please request a new one.'],
+            ]);
+        }
+
+        if ($otp->isExpired()) {
+            throw ValidationException::withMessages([
+                'otp' => ['This code has expired. Please request a new one.'],
+            ]);
+        }
+
+        $maxAttempts = max(1, (int) config('edams.password_reset_otp_max_attempts', 5));
+        if ($otp->attempts >= $maxAttempts) {
+            $otp->forceFill(['consumed_at' => now()])->save();
+            throw ValidationException::withMessages([
+                'otp' => ['Too many invalid attempts. Please request a new code.'],
+            ]);
+        }
+
+        if (! hash_equals($otp->code, $code)) {
+            $otp->increment('attempts');
+            throw ValidationException::withMessages([
+                'otp' => ['Invalid recovery code.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($user, $otp, $password) {
+            $user->forceFill([
+                'password' => $password,
+                'password_changed_at' => now(),
+                'force_password_change' => false,
+                'remember_token' => Str::random(60),
+                'updated_by' => $user->id,
+            ])->save();
+
+            $otp->forceFill([
+                'verified_at' => now(),
+                'consumed_at' => now(),
+            ])->save();
+
+            $user->tokens()->delete();
+
+            event(new PasswordReset($user));
+
+            return $user->fresh();
+        });
+    }
+
     public function resetPassword(array $credentials): string
     {
         return Password::reset(
@@ -191,6 +301,8 @@ class AuthService
                     'force_password_change' => false,
                     'remember_token' => Str::random(60),
                 ])->save();
+
+                $user->tokens()->delete();
 
                 event(new PasswordReset($user));
             }
@@ -235,6 +347,216 @@ class AuthService
         $user->save();
 
         return $user->fresh()->loadMissing(['roles', 'permissions']);
+    }
+
+    /**
+     * Send OTP to the user's current email before changing to a new address.
+     *
+     * @return array{otp: EmailChangeOtp, expires_in_minutes: int}
+     */
+    public function requestEmailChange(User $user, string $newEmail, Request $request): array
+    {
+        $newEmail = Str::lower(trim($newEmail));
+
+        if ($newEmail === Str::lower((string) $user->email)) {
+            throw ValidationException::withMessages([
+                'email' => ['New email must be different from your current email.'],
+            ]);
+        }
+
+        if (User::query()->where('email', $newEmail)->where('id', '!=', $user->id)->exists()) {
+            throw ValidationException::withMessages([
+                'email' => ['This email is already in use.'],
+            ]);
+        }
+
+        $ttl = max(1, (int) config('edams.email_change_otp_ttl_minutes', 10));
+        $code = (string) random_int(100000, 999999);
+
+        // Invalidate previous unused OTPs for this user
+        EmailChangeOtp::query()
+            ->where('user_id', $user->id)
+            ->whereNull('consumed_at')
+            ->update(['consumed_at' => now()]);
+
+        $otp = EmailChangeOtp::query()->create([
+            'user_id' => $user->id,
+            'current_email' => $user->email,
+            'new_email' => $newEmail,
+            'code' => $code,
+            'expires_at' => now()->addMinutes($ttl),
+            'ip_address' => $request->ip(),
+            'user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
+        ]);
+
+        $user->notify(new EmailChangeOtpNotification($code, $newEmail, $ttl));
+
+        return [
+            'otp' => $otp,
+            'expires_in_minutes' => $ttl,
+        ];
+    }
+
+    public function confirmEmailChange(User $user, string $code): User
+    {
+        $otp = EmailChangeOtp::query()
+            ->where('user_id', $user->id)
+            ->whereNull('consumed_at')
+            ->latest()
+            ->first();
+
+        if (! $otp) {
+            throw ValidationException::withMessages([
+                'otp' => ['No active email change request found. Please request a new code.'],
+            ]);
+        }
+
+        if ($otp->isExpired()) {
+            throw ValidationException::withMessages([
+                'otp' => ['This code has expired. Please request a new one.'],
+            ]);
+        }
+
+        $maxAttempts = max(1, (int) config('edams.email_change_otp_max_attempts', 5));
+        if ($otp->attempts >= $maxAttempts) {
+            $otp->forceFill(['consumed_at' => now()])->save();
+            throw ValidationException::withMessages([
+                'otp' => ['Too many invalid attempts. Please request a new code.'],
+            ]);
+        }
+
+        if (! hash_equals($otp->code, trim($code))) {
+            $otp->increment('attempts');
+            throw ValidationException::withMessages([
+                'otp' => ['Invalid verification code.'],
+            ]);
+        }
+
+        if (User::query()->where('email', $otp->new_email)->where('id', '!=', $user->id)->exists()) {
+            $otp->forceFill(['consumed_at' => now()])->save();
+            throw ValidationException::withMessages([
+                'email' => ['This email is already in use.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($user, $otp) {
+            $user->forceFill([
+                'email' => $otp->new_email,
+                'email_verified_at' => now(),
+                'updated_by' => $user->id,
+            ])->save();
+
+            $otp->forceFill([
+                'verified_at' => now(),
+                'consumed_at' => now(),
+            ])->save();
+
+            return $user->fresh()->loadMissing(['roles', 'permissions']);
+        });
+    }
+
+    public function paginateEmailChangeOtps(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    {
+        return $this->paginateOtpBook(array_merge($filters, ['type' => 'email_change']), $perPage);
+    }
+
+    /**
+     * Unified OTP book for email-change and password-reset codes.
+     *
+     * @return LengthAwarePaginator<int, object>
+     */
+    public function paginateOtpBook(array $filters = [], int $perPage = 20): LengthAwarePaginator
+    {
+        $type = $filters['type'] ?? null;
+        $rows = collect();
+
+        if ($type !== 'password_reset') {
+            $emailQuery = EmailChangeOtp::query()->with(['user:id,name,email']);
+            $this->applyOtpStatusFilter($emailQuery, $filters['status'] ?? null);
+            if (! empty($filters['search'])) {
+                $search = '%'.$filters['search'].'%';
+                $emailQuery->where(function ($q) use ($search) {
+                    $q->where('current_email', 'like', $search)
+                        ->orWhere('new_email', 'like', $search)
+                        ->orWhere('code', 'like', $search)
+                        ->orWhereHas('user', fn ($u) => $u->where('name', 'like', $search)->orWhere('email', 'like', $search));
+                });
+            }
+            $rows = $rows->merge($emailQuery->get()->map(fn (EmailChangeOtp $otp) => (object) [
+                'id' => $otp->id,
+                'type' => 'email_change',
+                'user' => $otp->user ? [
+                    'id' => $otp->user->id,
+                    'name' => $otp->user->name,
+                    'email' => $otp->user->email,
+                ] : null,
+                'email' => $otp->current_email,
+                'detail' => $otp->new_email,
+                'code' => $otp->code,
+                'status' => $otp->statusLabel(),
+                'expires_at' => $otp->expires_at?->toIso8601String(),
+                'created_at' => $otp->created_at?->toIso8601String(),
+                'ip_address' => $otp->ip_address,
+                'sort_at' => $otp->created_at,
+            ]));
+        }
+
+        if ($type !== 'email_change') {
+            $passwordQuery = PasswordResetOtp::query()->with(['user:id,name,email']);
+            $this->applyOtpStatusFilter($passwordQuery, $filters['status'] ?? null);
+            if (! empty($filters['search'])) {
+                $search = '%'.$filters['search'].'%';
+                $passwordQuery->where(function ($q) use ($search) {
+                    $q->where('email', 'like', $search)
+                        ->orWhere('code', 'like', $search)
+                        ->orWhereHas('user', fn ($u) => $u->where('name', 'like', $search)->orWhere('email', 'like', $search));
+                });
+            }
+            $rows = $rows->merge($passwordQuery->get()->map(fn (PasswordResetOtp $otp) => (object) [
+                'id' => $otp->id,
+                'type' => 'password_reset',
+                'user' => $otp->user ? [
+                    'id' => $otp->user->id,
+                    'name' => $otp->user->name,
+                    'email' => $otp->user->email,
+                ] : null,
+                'email' => $otp->email,
+                'detail' => null,
+                'code' => $otp->code,
+                'status' => $otp->statusLabel(),
+                'expires_at' => $otp->expires_at?->toIso8601String(),
+                'created_at' => $otp->created_at?->toIso8601String(),
+                'ip_address' => $otp->ip_address,
+                'sort_at' => $otp->created_at,
+            ]));
+        }
+
+        $sorted = $rows->sortByDesc(fn ($row) => $row->sort_at?->timestamp ?? 0)->values();
+        $page = max(1, (int) request()->input('page', 1));
+        $perPage = max(1, min(100, $perPage));
+        $slice = $sorted->forPage($page, $perPage)->values();
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $slice,
+            $sorted->count(),
+            $perPage,
+            $page,
+            ['path' => request()->url(), 'query' => request()->query()]
+        );
+    }
+
+    private function applyOtpStatusFilter($query, ?string $status): void
+    {
+        if (! $status) {
+            return;
+        }
+
+        match ($status) {
+            'pending' => $query->whereNull('consumed_at')->where('expires_at', '>', now()),
+            'used' => $query->whereNotNull('consumed_at'),
+            'expired' => $query->whereNull('consumed_at')->where('expires_at', '<=', now()),
+            default => null,
+        };
     }
 
     public function updateAvatar(User $user, \Illuminate\Http\UploadedFile $file): User

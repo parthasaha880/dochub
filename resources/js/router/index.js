@@ -42,6 +42,12 @@ const router = createRouter({
                     component: () => import('@/modules/auth/pages/ProfilePage.vue'),
                 },
                 {
+                    path: 'otp-book',
+                    name: 'otp-book',
+                    component: () => import('@/modules/auth/pages/OtpBookPage.vue'),
+                    meta: { permission: 'otp.view' },
+                },
+                {
                     path: 'security/sessions',
                     name: 'sessions',
                     component: () => import('@/modules/auth/pages/SessionsPage.vue'),
@@ -112,7 +118,18 @@ router.beforeEach(async (to) => {
         return { name: 'login', query: { redirect: to.fullPath } };
     }
 
+    // Nested routes inherit parent meta; check matched records for auth
+    const needsAuth = to.matched.some((r) => r.meta.auth);
+    if (needsAuth && !auth.isAuthenticated) {
+        return { name: 'login', query: { redirect: to.fullPath } };
+    }
+
     if (to.meta.guest && auth.isAuthenticated) {
+        return { name: 'dashboard' };
+    }
+
+    const permission = to.meta.permission || to.matched.find((r) => r.meta.permission)?.meta.permission;
+    if (permission && !auth.hasPermission(permission)) {
         return { name: 'dashboard' };
     }
 

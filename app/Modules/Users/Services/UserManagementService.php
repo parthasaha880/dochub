@@ -5,6 +5,7 @@ namespace App\Modules\Users\Services;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Modules\Authentication\Notifications\WelcomeUserNotification;
 use App\Modules\Users\Repositories\Contracts\UserManagementRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -32,6 +33,7 @@ class UserManagementService
         return DB::transaction(function () use ($data) {
             $roles = $data['roles'] ?? [];
             $directPermissions = $data['permissions'] ?? [];
+            $temporaryPassword = $data['password'] ?? null;
             unset($data['roles'], $data['permissions']);
 
             if (! empty($data['password'])) {
@@ -48,7 +50,13 @@ class UserManagementService
                 $user->syncPermissions($directPermissions);
             }
 
-            return $user->load(['roles', 'permissions']);
+            $user = $user->load(['roles', 'permissions']);
+
+            $user->notify(new WelcomeUserNotification(
+                temporaryPassword: is_string($temporaryPassword) ? $temporaryPassword : null,
+            ));
+
+            return $user;
         });
     }
 

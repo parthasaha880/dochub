@@ -47,6 +47,7 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'retention.manage', 'group' => 'retention', 'description' => 'Manage retention policies and runs'],
             ['name' => 'reports.view', 'group' => 'reports', 'description' => 'View reports'],
             ['name' => 'reports.export', 'group' => 'reports', 'description' => 'Export reports as CSV'],
+            ['name' => 'otp.view', 'group' => 'security', 'description' => 'View OTP book (email change codes)'],
         ];
 
         foreach ($permissions as $permission) {

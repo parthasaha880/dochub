@@ -11,7 +11,7 @@ class AuthDemoSeeder extends Seeder
     public function run(): void
     {
         $admin = User::query()->updateOrCreate(
-            ['email' => 'admin@edams.local'],
+            ['email' => 'parthasaha31@gmail.com'],
             [
                 'name' => 'System Administrator',
                 'username' => 'superadmin',

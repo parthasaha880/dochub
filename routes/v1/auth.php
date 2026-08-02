@@ -17,6 +17,10 @@ Route::prefix('auth')->group(function (): void {
         Route::get('me/avatar', [AuthController::class, 'avatar']);
         Route::post('me/avatar', [AuthController::class, 'uploadAvatar']);
         Route::delete('me/avatar', [AuthController::class, 'deleteAvatar']);
+        Route::post('me/email-change', [AuthController::class, 'requestEmailChange'])
+            ->middleware('throttle:5,1');
+        Route::post('me/email-change/confirm', [AuthController::class, 'confirmEmailChange'])
+            ->middleware('throttle:10,1');
         Route::post('email/verification-notification', [AuthController::class, 'sendVerificationEmail'])
             ->middleware('throttle:6,1');
         Route::get('email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])

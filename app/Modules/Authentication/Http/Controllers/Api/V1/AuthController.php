@@ -94,20 +94,59 @@ class AuthController extends Controller
         return ApiResponse::success(new UserResource($user), 'Photo removed');
     }
 
+    public function requestEmailChange(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $result = $this->authService->requestEmailChange(
+            $request->user(),
+            $data['email'],
+            $request
+        );
+
+        return ApiResponse::success([
+            'expires_in_minutes' => $result['expires_in_minutes'],
+            'current_email' => $result['otp']->current_email,
+            'new_email' => $result['otp']->new_email,
+        ], 'Verification code sent to your current email');
+    }
+
+    public function confirmEmailChange(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'otp' => ['required', 'string', 'size:6'],
+        ]);
+
+        $user = $this->authService->confirmEmailChange($request->user(), $data['otp']);
+
+        return ApiResponse::success(new UserResource($user), 'Email updated successfully');
+    }
+
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
-        $status = $this->authService->sendPasswordResetLink($request->validated('email'));
+        $result = $this->authService->requestPasswordResetOtp(
+            $request->validated('email'),
+            $request
+        );
 
-        if ($status !== Password::RESET_LINK_SENT) {
-            return ApiResponse::error(__($status), 422);
-        }
-
-        return ApiResponse::success(null, __($status));
+        return ApiResponse::success([
+            'expires_in_minutes' => $result['expires_in_minutes'],
+        ], 'If that email exists in EDAMS, a recovery code has been sent.');
     }
 
     public function resetPassword(ResetPasswordRequest $request): JsonResponse
     {
-        $status = $this->authService->resetPassword($request->validated());
+        $data = $request->validated();
+
+        if (! empty($data['otp'])) {
+            $this->authService->resetPasswordWithOtp($data);
+
+            return ApiResponse::success(null, 'Password updated successfully. You can sign in now.');
+        }
+
+        $status = $this->authService->resetPassword($data);
 
         if ($status !== Password::PASSWORD_RESET) {
             return ApiResponse::error(__($status), 422);

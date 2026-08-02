@@ -12,9 +12,15 @@ export const useAuthStore = defineStore('auth', () => {
     const isVerified = computed(() => !!user.value?.email_verified_at);
 
     function setSession(payload) {
-        user.value = payload.user;
-        token.value = payload.token;
-        localStorage.setItem('edams_token', payload.token);
+        const rawUser = payload?.user;
+        user.value = rawUser?.data ?? rawUser ?? null;
+        token.value = payload?.token || null;
+        if (token.value) {
+            localStorage.setItem('edams_token', token.value);
+        } else {
+            localStorage.removeItem('edams_token');
+        }
+        initialized.value = true;
     }
 
     function clearSession() {
@@ -119,6 +125,23 @@ export const useAuthStore = defineStore('auth', () => {
         return user.value;
     }
 
+    async function requestEmailChange(email) {
+        const { data } = await api.post('/auth/me/email-change', { email });
+        return data.data;
+    }
+
+    async function confirmEmailChange(otp) {
+        const { data } = await api.post('/auth/me/email-change/confirm', { otp });
+        user.value = data.data;
+        return user.value;
+    }
+
+    function hasPermission(name) {
+        if (!user.value) return false;
+        if (user.value.roles?.includes('super_admin')) return true;
+        return (user.value.permissions || []).includes(name);
+    }
+
     return {
         user,
         token,
@@ -138,6 +161,9 @@ export const useAuthStore = defineStore('auth', () => {
         updateProfile,
         uploadAvatar,
         removeAvatar,
+        requestEmailChange,
+        confirmEmailChange,
+        hasPermission,
         clearSession,
     };
 });
