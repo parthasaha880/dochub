@@ -63,7 +63,7 @@
             <h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">Change email</h2>
             <p class="mb-4 text-sm text-slate-500">
                 A one-time code will be sent to your <strong>current</strong> email
-                (<span class="text-slate-700 dark:text-slate-200">({{ auth.user?.email }})</span>.
+                <span class="text-slate-700 dark:text-slate-200">({{ auth.user?.email }})</span>.
                 The code expires in {{ otpExpiresIn || 10 }} minutes.
             </p>
 

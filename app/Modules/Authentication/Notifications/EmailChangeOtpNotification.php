@@ -25,6 +25,7 @@ class EmailChangeOtpNotification extends Notification
     {
         return (new MailMessage)
             ->subject('EDAMS security code — confirm your email change')
+            ->from(config('mail.from.address'), config('mail.from.name'))
             ->view('emails.email-change-otp', [
                 'name' => $notifiable->name,
                 'otpCode' => $this->otpCode,

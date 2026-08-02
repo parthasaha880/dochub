@@ -24,6 +24,7 @@ class PasswordResetOtpNotification extends Notification
     {
         return (new MailMessage)
             ->subject('EDAMS recovery code — reset your password')
+            ->from(config('mail.from.address'), config('mail.from.name'))
             ->view('emails.password-reset-otp', [
                 'name' => $notifiable->name,
                 'email' => $notifiable->email,

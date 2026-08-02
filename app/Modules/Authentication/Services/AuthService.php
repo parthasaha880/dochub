@@ -213,7 +213,13 @@ class AuthService
                 'user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
             ]);
 
-            $user->notify(new PasswordResetOtpNotification($code, $ttl));
+            try {
+                $user->notify(new PasswordResetOtpNotification($code, $ttl));
+            } catch (\Throwable $e) {
+                report($e);
+                // Still return generic success to avoid email enumeration,
+                // but log the failure for ops.
+            }
         }
 
         return [
@@ -389,7 +395,15 @@ class AuthService
             'user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
         ]);
 
-        $user->notify(new EmailChangeOtpNotification($code, $newEmail, $ttl));
+        try {
+            $user->notify(new EmailChangeOtpNotification($code, $newEmail, $ttl));
+        } catch (\Throwable $e) {
+            report($e);
+
+            throw ValidationException::withMessages([
+                'email' => ['OTP was generated but email could not be sent. Please check mail settings or try again. ('.$e->getMessage().')'],
+            ]);
+        }
 
         return [
             'otp' => $otp,

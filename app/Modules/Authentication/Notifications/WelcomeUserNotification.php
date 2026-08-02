@@ -23,6 +23,7 @@ class WelcomeUserNotification extends Notification
     {
         return (new MailMessage)
             ->subject('Welcome to EDAMS — your account is ready')
+            ->from(config('mail.from.address'), config('mail.from.name'))
             ->view('emails.welcome', [
                 'name' => $notifiable->name,
                 'email' => $notifiable->email,
