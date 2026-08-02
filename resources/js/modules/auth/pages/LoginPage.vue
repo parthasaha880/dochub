@@ -30,7 +30,7 @@
                     <div>
                         <label class="mb-2 block text-sm font-medium">Email</label>
                         <InputText v-model="form.email" type="email" class="w-full" autocomplete="username" required />
-                        <small v-if="errors.email" class="mt-1 block text-red-600">{{ errors.email }}</small>
+                        <small v-if="fieldError('email')" class="mt-1 block text-red-600">{{ fieldError('email') }}</small>
                     </div>
 
                     <div>
@@ -44,7 +44,7 @@
                             autocomplete="current-password"
                             required
                         />
-                        <small v-if="errors.password" class="mt-1 block text-red-600">{{ errors.password }}</small>
+                        <small v-if="fieldError('password')" class="mt-1 block text-red-600">{{ fieldError('password') }}</small>
                     </div>
 
                     <div class="flex items-center justify-between">
@@ -87,18 +87,37 @@ const form = reactive({
 
 const errors = ref({});
 
+function fieldError(key) {
+    const value = errors.value?.[key];
+    if (!value) return '';
+    return Array.isArray(value) ? value[0] : String(value);
+}
+
+function normalizeEmail(email) {
+    let value = String(email || '').trim().toLowerCase();
+    // Common autofill / typo fixes for email TLDs
+    value = value
+        .replace(/\.ocm$/i, '.com')
+        .replace(/\.con$/i, '.com')
+        .replace(/\.cpm$/i, '.com')
+        .replace(/\.comm$/i, '.com');
+    return value;
+}
+
 async function onSubmit() {
     errors.value = {};
+    form.email = normalizeEmail(form.email);
     try {
         await auth.login(form);
         toast.add({ severity: 'success', summary: 'Welcome back', life: 2500 });
         router.push(route.query.redirect || { name: 'dashboard' });
     } catch (error) {
-        errors.value = error.response?.data?.errors || {};
+        const payload = error.response?.data || {};
+        errors.value = payload.errors || {};
         toast.add({
             severity: 'error',
             summary: 'Login failed',
-            detail: error.response?.data?.message || 'Unable to sign in',
+            detail: fieldError('email') || payload.message || 'Unable to sign in',
             life: 4000,
         });
     }
