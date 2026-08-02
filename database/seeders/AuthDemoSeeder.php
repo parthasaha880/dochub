@@ -10,22 +10,39 @@ class AuthDemoSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::query()->updateOrCreate(
-            ['email' => 'parthasaha31@gmail.com'],
+        $admins = [
             [
+                'email' => 'admin@edams.local',
                 'name' => 'System Administrator',
-                'username' => 'superadmin',
+                'username' => 'admin',
                 'employee_id' => 'EMP-0001',
-                'is_active' => true,
-                'email_verified_at' => now(),
-                'password' => Hash::make('Password@12345'),
-                'password_changed_at' => now(),
-                'timezone' => 'UTC',
-                'locale' => 'en',
-                'theme' => 'system',
-            ]
-        );
+            ],
+            [
+                'email' => 'parthasaha31@gmail.com',
+                'name' => 'Partha Saha',
+                'username' => 'superadmin',
+                'employee_id' => 'EMP-0002',
+            ],
+        ];
 
-        $admin->assignRole('super_admin');
+        foreach ($admins as $row) {
+            $user = User::query()->updateOrCreate(
+                ['email' => $row['email']],
+                [
+                    'name' => $row['name'],
+                    'username' => $row['username'],
+                    'employee_id' => $row['employee_id'],
+                    'is_active' => true,
+                    'email_verified_at' => now(),
+                    'password' => Hash::make('Password@12345'),
+                    'password_changed_at' => now(),
+                    'timezone' => 'UTC',
+                    'locale' => 'en',
+                    'theme' => 'system',
+                ]
+            );
+
+            $user->assignRole('super_admin');
+        }
     }
 }

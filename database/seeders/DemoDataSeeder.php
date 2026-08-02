@@ -21,11 +21,23 @@ class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
+        // Ensure prerequisites exist even if seeders were run out of order.
+        if (! Organization::query()->where('code', 'EDAMS')->exists()) {
+            $this->call(OrganizationDemoSeeder::class);
+        }
+
+        if (! User::query()->role('super_admin')->exists()
+            && ! User::query()->whereIn('email', ['admin@edams.local', 'parthasaha31@gmail.com'])->exists()) {
+            $this->call(AuthDemoSeeder::class);
+        }
+
         $org = Organization::query()->where('code', 'EDAMS')->first();
-        $admin = User::query()->where('email', 'admin@edams.local')->first();
+        $admin = User::query()->where('email', 'admin@edams.local')->first()
+            ?? User::query()->role('super_admin')->first()
+            ?? User::query()->where('email', 'parthasaha31@gmail.com')->first();
 
         if (! $org || ! $admin) {
-            $this->command?->warn('DemoDataSeeder skipped: run OrganizationDemoSeeder / AuthDemoSeeder first.');
+            $this->command?->error('DemoDataSeeder aborted: organization or admin user still missing after prerequisites.');
 
             return;
         }

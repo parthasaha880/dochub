@@ -96,7 +96,8 @@ class OrganizationDemoSeeder extends Seeder
             ]
         );
 
-        $admin = User::query()->where('email', 'admin@edams.local')->first();
+        $admin = User::query()->where('email', 'admin@edams.local')->first()
+            ?? User::query()->role('super_admin')->first();
 
         if ($admin) {
             Employee::query()->updateOrCreate(
