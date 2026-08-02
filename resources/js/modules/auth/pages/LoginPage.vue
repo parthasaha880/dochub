@@ -80,8 +80,8 @@ const route = useRoute();
 const toast = useToast();
 
 const form = reactive({
-    email: 'admin@edams.local',
-    password: 'Password@12345',
+    email: '',
+    password: '',
     remember: true,
 });
 
