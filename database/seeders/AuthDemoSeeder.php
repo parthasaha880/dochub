@@ -43,7 +43,7 @@ class AuthDemoSeeder extends Seeder
                     'employee_id' => $row['employee_id'],
                     'is_active' => true,
                     'email_verified_at' => now(),
-                    'password' => Hash::make('Password@12345'),
+                    'password' => $row['password'],
                     'password_changed_at' => now(),
                     'timezone' => 'UTC',
                     'locale' => 'en',
