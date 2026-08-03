@@ -16,18 +16,21 @@ class AuthDemoSeeder extends Seeder
                 'name' => 'System Administrator',
                 'username' => 'admin',
                 'employee_id' => 'EMP-0001',
+                'password' => Hash::make('Password@12345v90wey2'),
             ],
             [
                 'email' => 'parthasaha31@gmail.com',
                 'name' => 'Partha Saha',
-                'username' => 'superadmin',
+                'username' => 'parthasaha31@gmail.com',
                 'employee_id' => 'EMP-0002',
+                'password' => Hash::make('Kompass2025#LD'),
             ],
             [
                 'email' => 'jahid@softcellbd.net',
                 'name' => 'Jahid Hasan',
-                'username' => 'jahid',
+                'username' => 'jahid@softcellbd.net',
                 'employee_id' => 'EMP-0003',
+                'password' => Hash::make('jahid2025#LDB'),
             ],
         ];
 
