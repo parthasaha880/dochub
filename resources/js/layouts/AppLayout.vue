@@ -216,6 +216,7 @@ const allNavItems = [
     { label: 'Dashboard', to: 'dashboard', icon: 'pi-home' },
     { label: 'Organization', to: 'organization', icon: 'pi-building' },
     { label: 'Documents', to: 'documents', icon: 'pi-folder' },
+    { label: 'Archive & Records', to: 'archive', icon: 'pi-box', permission: 'archive.view' },
     { label: 'Search', to: 'search', icon: 'pi-search' },
     { label: 'Workflow', to: 'workflow', icon: 'pi-sitemap' },
     { label: 'Operations', to: 'operations', icon: 'pi-cog' },

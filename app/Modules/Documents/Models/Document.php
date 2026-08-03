@@ -26,6 +26,7 @@ class Document extends Model
     protected $fillable = [
         'organization_id',
         'folder_id',
+        'location_id',
         'department_id',
         'category_id',
         'subcategory_id',
@@ -34,6 +35,7 @@ class Document extends Model
         'title',
         'reference_no',
         'archive_no',
+        'physical_reference',
         'barcode',
         'qr_code',
         'description',
@@ -46,6 +48,7 @@ class Document extends Model
         'expiry_date',
         'approval_status',
         'status',
+        'media_type',
         'remarks',
         'disk',
         'path',
@@ -91,6 +94,11 @@ class Document extends Model
     public function folder(): BelongsTo
     {
         return $this->belongsTo(Folder::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Archive\Models\ArchiveLocation::class, 'location_id');
     }
 
     public function department(): BelongsTo

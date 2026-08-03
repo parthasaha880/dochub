@@ -2,6 +2,8 @@
 
 namespace App\Modules\Documents\Services;
 
+use App\Modules\Archive\Enums\MediaType;
+use App\Modules\Archive\Services\DocumentNumberingService;
 use App\Models\User;
 use App\Modules\Audit\Services\AuditLogger;
 use App\Modules\Documents\Enums\ApprovalStatus;
@@ -27,6 +29,7 @@ class DocumentService
         private readonly DocumentRepositoryInterface $repository,
         private readonly DocumentStorageService $storage,
         private readonly AuditLogger $audit,
+        private readonly DocumentNumberingService $numbering,
     ) {}
 
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
@@ -54,9 +57,14 @@ class DocumentService
                 'uploader_id' => $actor->id,
                 'approval_status' => $data['approval_status'] ?? ApprovalStatus::Draft->value,
                 'status' => $data['status'] ?? DocumentStatus::Active->value,
+                'media_type' => $data['media_type'] ?? MediaType::Digital->value,
                 'confidentiality_level' => $data['confidentiality_level'] ?? ConfidentialityLevel::Internal->value,
+                'archive_no' => $data['archive_no'] ?? $this->numbering->next($data['organization_id'], 'ARC'),
+                'reference_no' => $data['reference_no'] ?? $this->numbering->next($data['organization_id'], 'REF'),
                 'barcode' => $data['barcode'] ?? $this->generateCode('BC'),
                 'qr_code' => $data['qr_code'] ?? $this->generateCode('QR'),
+                'location_id' => $data['location_id'] ?? null,
+                'physical_reference' => $data['physical_reference'] ?? null,
             ]);
 
             $this->createVersion($document, $stored, $actor->id, 'Initial upload');
@@ -606,6 +614,7 @@ class DocumentService
                 'title',
                 'reference_no',
                 'archive_no',
+                'physical_reference',
                 'description',
                 'keywords',
                 'confidentiality_level',
@@ -614,6 +623,8 @@ class DocumentService
                 'archive_date',
                 'expiry_date',
                 'status',
+                'media_type',
+                'location_id',
                 'remarks',
                 'owner_id',
             ])

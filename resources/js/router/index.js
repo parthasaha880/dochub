@@ -78,6 +78,12 @@ const router = createRouter({
                     component: () => import('@/modules/documents/pages/DocumentsPage.vue'),
                 },
                 {
+                    path: 'archive',
+                    name: 'archive',
+                    component: () => import('@/modules/archive/pages/ArchivePage.vue'),
+                    meta: { permission: 'archive.view' },
+                },
+                {
                     path: 'workflow',
                     name: 'workflow',
                     component: () => import('@/modules/workflow/pages/WorkflowPage.vue'),

@@ -5,6 +5,10 @@ namespace App\Providers;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Modules\Archive\Models\ArchiveLocation;
+use App\Modules\Archive\Policies\ArchiveLocationPolicy;
+use App\Modules\Archive\Repositories\ArchiveRepository;
+use App\Modules\Archive\Repositories\Contracts\ArchiveRepositoryInterface;
 use App\Modules\Authentication\Models\UserDevice;
 use App\Modules\Authentication\Policies\UserDevicePolicy;
 use App\Modules\Authentication\Repositories\AuthRepository;
@@ -57,6 +61,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(OrganizationStructureRepositoryInterface::class, OrganizationStructureRepository::class);
         $this->app->bind(UserManagementRepositoryInterface::class, UserManagementRepository::class);
         $this->app->bind(DocumentRepositoryInterface::class, DocumentRepository::class);
+        $this->app->bind(ArchiveRepositoryInterface::class, ArchiveRepository::class);
         $this->app->bind(WorkflowRepositoryInterface::class, WorkflowRepository::class);
         $this->app->bind(DashboardRepositoryInterface::class, DashboardRepository::class);
         $this->app->bind(SearchRepositoryInterface::class, SearchRepository::class);
@@ -70,6 +75,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Permission::class, PermissionPolicy::class);
         Gate::policy(Document::class, DocumentPolicy::class);
         Gate::policy(Folder::class, FolderPolicy::class);
+        Gate::policy(ArchiveLocation::class, ArchiveLocationPolicy::class);
         Gate::policy(Workflow::class, WorkflowPolicy::class);
         Gate::policy(WorkflowInstance::class, WorkflowPolicy::class);
         Gate::policy(SavedSearch::class, SavedSearchPolicy::class);

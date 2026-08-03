@@ -32,6 +32,8 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'documents.manage', 'group' => 'documents', 'description' => 'Manage documents'],
             ['name' => 'documents.delete', 'group' => 'documents', 'description' => 'Delete documents'],
             ['name' => 'folders.manage', 'group' => 'documents', 'description' => 'Manage folders'],
+            ['name' => 'archive.view', 'group' => 'archive', 'description' => 'View archive and records'],
+            ['name' => 'archive.manage', 'group' => 'archive', 'description' => 'Manage archive locations and records'],
             ['name' => 'workflow.view', 'group' => 'workflow', 'description' => 'View workflows and approval history'],
             ['name' => 'workflow.manage', 'group' => 'workflow', 'description' => 'Manage workflow definitions'],
             ['name' => 'workflow.submit', 'group' => 'workflow', 'description' => 'Submit documents for approval'],
@@ -87,6 +89,7 @@ class RolePermissionSeeder extends Seeder
                 'organization.view', 'employees.view', 'users.view', 'roles.view', 'permissions.view',
                 'documents.view', 'documents.download', 'workflow.view', 'dashboard.view', 'search.view',
                 'audit.view', 'notifications.view', 'sharing.view', 'retention.view', 'reports.view',
+                'archive.view',
             ])
             ->get();
 
@@ -103,6 +106,7 @@ class RolePermissionSeeder extends Seeder
             'documents.upload',
             'documents.delete',
             'folders.manage',
+            'archive.manage',
             'workflow.manage',
             'workflow.submit',
             'workflow.approve',

@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             OrganizationDemoSeeder::class,
             WorkflowDemoSeeder::class,
             DemoDataSeeder::class,
+            ArchiveDemoSeeder::class,
         ]);
     }
 }

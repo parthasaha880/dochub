@@ -14,7 +14,7 @@ class DocumentRepository implements DocumentRepositoryInterface
     public function paginateDocuments(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = Document::query()
-            ->with(['folder', 'department', 'owner', 'uploader', 'tags', 'checkedOutByUser'])
+            ->with(['folder', 'department', 'owner', 'uploader', 'tags', 'checkedOutByUser', 'location'])
             ->latest();
 
         if (! empty($filters['organization_id'])) {
@@ -35,7 +35,7 @@ class DocumentRepository implements DocumentRepositoryInterface
             $query->where('is_hidden', false);
         }
 
-        foreach (['department_id', 'category_id', 'status', 'approval_status', 'document_type', 'extension'] as $key) {
+        foreach (['department_id', 'category_id', 'status', 'approval_status', 'document_type', 'extension', 'media_type', 'location_id'] as $key) {
             if (! empty($filters[$key])) {
                 $query->where($key, $filters[$key]);
             }
@@ -47,6 +47,9 @@ class DocumentRepository implements DocumentRepositoryInterface
                 $builder->where('title', 'like', "%{$search}%")
                     ->orWhere('reference_no', 'like', "%{$search}%")
                     ->orWhere('archive_no', 'like', "%{$search}%")
+                    ->orWhere('barcode', 'like', "%{$search}%")
+                    ->orWhere('qr_code', 'like', "%{$search}%")
+                    ->orWhere('physical_reference', 'like', "%{$search}%")
                     ->orWhere('keywords', 'like', "%{$search}%")
                     ->orWhere('original_name', 'like', "%{$search}%");
             });

@@ -22,6 +22,13 @@ class SearchRepository implements SearchRepositoryInterface
         'keywords',
     ];
 
+    private const EXTRA_SEARCH_COLUMNS = [
+        'barcode',
+        'qr_code',
+        'physical_reference',
+        'original_name',
+    ];
+
     public function searchDocuments(array $filters, int $perPage = 15): LengthAwarePaginator
     {
         $query = Document::query()
@@ -137,15 +144,22 @@ class SearchRepository implements SearchRepositoryInterface
     private function applyTextSearch(Builder $query, string $q): void
     {
         $driver = DB::connection()->getDriverName();
+        $like = '%'.$q.'%';
 
         if ($driver === 'mysql') {
             $columns = implode(',', self::FULLTEXT_COLUMNS);
             $boolean = $this->toBooleanModeTerms($q);
 
-            $query->whereRaw(
-                "MATCH ({$columns}) AGAINST (? IN BOOLEAN MODE)",
-                [$boolean]
-            )->select('documents.*')
+            $query->where(function (Builder $outer) use ($columns, $boolean, $like) {
+                $outer->whereRaw(
+                    "MATCH ({$columns}) AGAINST (? IN BOOLEAN MODE)",
+                    [$boolean]
+                )->orWhere(function (Builder $extra) use ($like) {
+                    foreach (self::EXTRA_SEARCH_COLUMNS as $column) {
+                        $extra->orWhere($column, 'like', $like);
+                    }
+                });
+            })->select('documents.*')
                 ->selectRaw(
                     "MATCH ({$columns}) AGAINST (? IN BOOLEAN MODE) as relevance",
                     [$boolean]
@@ -156,9 +170,8 @@ class SearchRepository implements SearchRepositoryInterface
         }
 
         // SQLite / other drivers: LIKE fallback (tests)
-        $like = '%'.$q.'%';
         $query->where(function (Builder $builder) use ($like): void {
-            foreach ([...self::FULLTEXT_COLUMNS, 'original_name'] as $column) {
+            foreach ([...self::FULLTEXT_COLUMNS, ...self::EXTRA_SEARCH_COLUMNS] as $column) {
                 $builder->orWhere($column, 'like', $like);
             }
         })->latest();
