@@ -196,16 +196,19 @@ class WorkflowRepository implements WorkflowRepositoryInterface
     public function paginateInbox(User $user, array $filters, int $perPage = 15): LengthAwarePaginator
     {
         $roleIds = $user->roles()->pluck('id')->all();
+        $isSuperAdmin = $user->hasRole('super_admin');
 
         return WorkflowInstance::query()
             ->with(['document', 'workflow', 'currentStep.role', 'currentStep.approvers', 'submitter'])
             ->where('status', WorkflowInstanceStatus::InProgress->value)
             ->whereNotNull('current_step_id')
             ->when($filters['organization_id'] ?? null, fn ($q, $id) => $q->where('organization_id', $id))
-            ->whereHas('currentStep', function ($q) use ($user, $roleIds) {
-                $q->where(function ($inner) use ($user, $roleIds) {
-                    $inner->whereIn('role_id', $roleIds)
-                        ->orWhereHas('approvers', fn ($a) => $a->where('users.id', $user->id));
+            ->when(! $isSuperAdmin, function ($q) use ($user, $roleIds) {
+                $q->whereHas('currentStep', function ($stepQuery) use ($user, $roleIds) {
+                    $stepQuery->where(function ($inner) use ($user, $roleIds) {
+                        $inner->whereIn('role_id', $roleIds)
+                            ->orWhereHas('approvers', fn ($a) => $a->where('users.id', $user->id));
+                    });
                 });
             })
             ->when($filters['search'] ?? null, function ($q, $search) {

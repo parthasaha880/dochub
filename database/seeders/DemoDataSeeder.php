@@ -129,14 +129,16 @@ class DemoDataSeeder extends Seeder
             ['type' => 'IMAGE SCAN', 'ext' => 'jpg', 'mime' => 'image/jpeg', 'weight' => 14, 'size' => [200_000, 3_500_000]],
         ];
 
+        // Only statuses that do not require a live workflow_instance.
+        // "under_review" must come from WorkflowService::submitDocument.
         $approvals = [
             ApprovalStatus::Draft,
-            ApprovalStatus::UnderReview,
+            ApprovalStatus::Draft,
+            ApprovalStatus::Approved,
+            ApprovalStatus::Approved,
             ApprovalStatus::Approved,
             ApprovalStatus::Rejected,
             ApprovalStatus::Returned,
-            ApprovalStatus::Approved,
-            ApprovalStatus::Approved,
         ];
 
         $disk = config('filesystems.default', 'local');
